@@ -36,10 +36,9 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     % X(7) (Y_b)
     [xbranch,ybranch] = rtPoints(xbranch,ybranch,0,x_state(5),x_state(7));
     % fill with brown
-    branch = polyshape(xbranch,ybranch);
-    plot(branch, 'FaceColor', [87/255,26/255,7/255]);
+    branch = polyshape(xbranch,ybranch)
+    plot(branch, 'FaceColor', [87/255,26/255,7/255])
 %     fill(xbranch, ybranch,[87/255,26/255,7/255]);
-    plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
     
     %% Draw cutter joint
     % Update x and y position of joint center
@@ -49,14 +48,14 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 
     %% Draw top cutter
     [xtop,ytop] = rtPoints(p.top_x',p.top_y',0,x_state(1), x_state(3));
-%     topcutter = polyshape(xtop, ytop);
-%     plot(topcutter, 'FaceColor', [.7,.7,.7]);
-    fill(xtop,ytop,[.7,.7,.7]);
+    topcutter = polyshape(xtop, ytop);
+    plot(topcutter, 'FaceColor', [.7,.7,.7]);
+%     fill(xtop,ytop,[.7,.7,.7]);
     
     [xbot,ybot] = rtPoints(p.bot_x',p.bot_y',0,x_state(1), x_state(3));
-%     botcutter = polyshape(xbot,ybot);
-%     plot(botcutter, 'FaceColor', [.7,.7,.7]);
-    fill(xbot,ybot,[.7,.7,.7]);
+    botcutter = polyshape(xbot,ybot);
+    plot(botcutter, 'FaceColor', [.7,.7,.7]);
+%     fill(xbot,ybot,[.8,.8,.8]);
     
 
 %% Set proximal link parameters and draw it
@@ -183,9 +182,6 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 
     %Set axis, dimensions of figure
     axis([-.2, .1, -.1, .1]);
-    xlabel('X Position (m)')
-    ylabel('Y Position (m)')
-    title('Pruning Animation')
     fig = gcf;
     fig.Position(3:4) = [752,500];
     movegui
