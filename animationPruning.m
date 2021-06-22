@@ -39,7 +39,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     branch = polyshape(xbranch,ybranch);
     plot(branch, 'FaceColor', [87/255,26/255,7/255]);
 %     fill(xbranch, ybranch,[87/255,26/255,7/255]);
-    plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
+
     
     %% Draw cutter joint
     % Update x and y position of joint center
@@ -59,6 +59,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     fill(xbot,ybot,[.7,.7,.7]);
     
     %% Draw Force arrows
+    plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
     top_cutter = polyshape(p.top_x+x_state(1), p.top_y+x_state(3));
 %     t1 = 0:.1:2*pi;
 %     branch = polyshape(p.r_branch.*cos(t1)+X_B, p.r_branch.*sin(t1)+Y_B);
@@ -221,7 +222,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 
     % Write current time step on plot
     timetext = ['Time: ',num2str(t_plt)];
-    text(-0.07, 0.65, timetext);
+    text(-0.07, 0.035, timetext);
 
     %Set axis, dimensions of figure
     axis([-.075, .075, -.04, .04]);
