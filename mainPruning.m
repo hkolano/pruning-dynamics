@@ -32,7 +32,7 @@ p.b = .3;                % WAG (branch doesn't really oscillate)
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-X0 = [-.05, .05, 0, 0, .1, 0, .05, 0];
+X0 = [-.05, .05, 0, 0, 0.01, 0, 0.0, 0];
 
 [t_vec, X_vec] = simPruning(X0,p);
 
@@ -45,6 +45,6 @@ X0 = [-.05, .05, 0, 0, .1, 0, .05, 0];
 
 %% Animate
 exportVideo = false;
-playbackRate = 1;
+playbackRate = .5;
 animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
 

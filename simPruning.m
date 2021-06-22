@@ -11,7 +11,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Running time
     t_start = 0;
-    t_end = 2;
+    t_end = 1;
     dt = 0.005;
 
     t_vec = t_start:dt:t_end;
@@ -26,7 +26,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', free_event_fun);
     optionsHit = odeset(...
-        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
+        'RelTol', 1e-6, 'AbsTol', 1e-6, ...
         'Events', hit_event_fun);
 
     % Bind dynamics function
@@ -47,8 +47,13 @@ function [t_vec, X_vec] = simPruning(X0,p)
             disp('Contact! at t = ')
             disp(sol.x(end))
             p.state = 2;
-        else % p.state == 2
+        else % p.state == 2 (in contact with top blade)
+            disp('Starting contact dynamics')
+            X0(6) = X0(2); % Branch instantaneously matches velocity of cutter
+            X0(8) = X0(4); 
             sol = ode45(contact_dyn_fun, [t_start,t_end], X0, optionsHit);
+            disp('Came free! at t = ')
+            disp(sol.x(end))
 %             disp('Disconnected! at t = ')
 %             disp(sol.x(end))
             p.state = 1;
@@ -84,11 +89,16 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
 end % simRDHT
 
+%% Dynamics Functions
+
 function dX = freedyn(t,X,p)
     % t == time
     % X == the state (theta1, dtheta1, x1, dx1, x2, dx2, theta2, dtheta2)
     % p == parameters structure
 %     Tau_ctrl = ctrl_fun(t,X);
+
+    F_Kx = -p.kx*X(5)-p.b*X(6);
+    F_Ky = -p.ky*X(7)-p.b*X(8);
 
    dX = zeros(length(X),1);
    dX(1) = X(2);
@@ -96,52 +106,66 @@ function dX = freedyn(t,X,p)
    dX(5) = X(6);
    dX(7) = X(8);
    
-   dX(6) = (-p.kx*X(5)-p.b*X(6))/p.m_branch;
-   dX(8) = (-p.ky*X(7)-p.b*X(8))/p.m_branch;
+   dX(6) = F_Kx/p.m_branch;
+   dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
 function dX = stoppeddyn(t,X,p)
 
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
-    % translate the polyshape
-%     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-%     t1 = 0:.002:2*pi;
-%     branch = polyshape(p.r_branch*cos(t1)+X_B, p.r_branch*sin(t1)+Y_B);
-%     
-%     poly_int = intersect(top_cutter, branch);
-%     [C_intx, C_inty] = centroid(poly_int)
-%     
-%     [vertexid,~,~] = nearestvertex(branch,C_intx, C_inty);
-%     dy = C_inty-branch.Vertices(vertexid,2);
-%     dx = C_intx-branch.Vertices(vertexid,1);
-%     ang = atan(dy/dx)
+       
+    % Restoring forces to the branch
+    F_Kx = -p.kx*X(5); %-p.b*X(6);
+    F_Ky = -p.ky*X(7); %-p.b*X(8);
+    F_K = sqrt(F_Ky^2+F_Kx^2);
+    
+    th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from horiz)
+%     th_Fk = atan2(F_Kx, F_Ky);
+    
+%   translate the polyshape
+    top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
+    t1 = 0:.02:2*pi;
+    branch = polyshape(p.r_branch.*cos(t1)+X_B, p.r_branch.*sin(t1)+Y_B)
+    
+    % Find intersect between the cutter and the branch
+    % Check for overlap
+%     disp('Spot check for overlap: ')
+%     disp(overlaps(top_cutter, branch))
+%     if overlaps(top_cutter, branch)
+        poly_int = intersect(top_cutter, branch);
+        [C_intx, C_inty] = centroid(poly_int);
+
+        % Find angle of the normal
+        dy = Y_B-C_inty;
+        dx = X_B-C_intx;
+        th_N = atan(dy/dx); % Angle of normal force
+    %     th_N = atan2(dy, dx)
+
+        % Angle to project F_K onto F_N vector 
+        th_projection = th_N - th_Fk;
+
+        F_N = F_K*cos(th_projection);
+        F_Nx = F_N*cos(th_N);
+        F_Ny = F_N*sin(th_N);
+%     else
+%         F_Nx = 0; F_Ny = 0;
+%         disp('No intersecting shape!! Error! Error!')
+%     end
 
     dX = zeros(length(X),1);
    dX(1) = X(2);
    dX(3) = X(4);
+   dX(5) = X(6);
+   dX(7) = X(8);
    
-   if sign((-p.kx*X(5)-p.b*X(6))/p.m_branch) ~= sign(X(2))
-       dX(6) = (-p.kx*X(5)-p.b*X(6))/p.m_branch;
-   else
-       dX(5) = X(2);
-   end
-   if sign((-p.ky*X(7)-p.b*X(8))/p.m_branch) ~= sign(X(4))
-       dX(8) = (-p.ky*X(7)-p.b*X(8))/p.m_branch;
-   else
-       dX(7) = X(4);
-   end
+   dX(6) = (F_Kx+F_Nx)/p.m_branch;
+   dX(8) = (F_Ky+F_Ny)/p.m_branch;
+   
 
 end
 
-%% Hybrid functions
-function dX = dyn_ballfloor(t,X,p,ctrl_fun)
-    % t == time
-    % X == the state (theta1, dtheta1, x1, dx1, x2, dx2, theta2, dtheta2)
-    % p == parameters structure
 
-end % dynamics
-
-%% Hybrid functions
+%% Event Functions
 function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
     % Inputs
     % t: time, X: the state, p: parameters structure
@@ -151,18 +175,22 @@ function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
     % direction: which direction of crossing should the sim halt (positive)
     
     % Position of center of cutter joint
-    X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
+    X_C = X(1);   Y_C = X(3); X_B = X(5); Y_B = X(7);
+    
     % translate the polyshape
     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
+    t3 = 0:.02:2*pi;
+    branch = polyshape(p.r_branch.*cos(t3)+X_B, p.r_branch.*sin(t3)+Y_B);
+    overlap_shape = intersect(top_cutter, branch);
     
-    [vertexid,~,~] = nearestvertex(top_cutter,X_B, Y_B);
-    dist_to_branch = sqrt((X_B-top_cutter.Vertices(vertexid,1))^2 + (Y_B-top_cutter.Vertices(vertexid,2))^2)-p.r_branch;
+%     [vertexid,~,~] = nearestvertex(top_cutter,X_B, Y_B);
+%     dist_to_branch = sqrt((X_B-top_cutter.Vertices(vertexid,1))^2 + (Y_B-top_cutter.Vertices(vertexid,2))^2)-p.r_branch;
 
-%     height_rod = p.h-p.l_rod*sin(X(7));
-%     dist = height_rod-(p.obstacle_height+p.rball);
-    eventVal = dist_to_branch-.00;   % when spring at equilibrium distance...
+%     disp('Area of overlap')
+%     disp(area(overlap_shape));
+    eventVal = area(overlap_shape)-.000002;
     isterminal = 1;     % stops the sim
-    direction = -1;      % any direction
+    direction = 1;      % any direction
 end
 %
 function [eventVal, isterminal, direction] = contactBranchEvent(t,X,p)
@@ -172,16 +200,20 @@ function [eventVal, isterminal, direction] = contactBranchEvent(t,X,p)
     % direction: which direction of crossing should the sim halt (positive)
         % Position of center of cutter joint
     X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
+    
     % translate the polyshape
     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-    t1 = 0:.002:2*pi;
-    branch = polyshape(p.r_branch*cos(t1)+X_B, p.r_branch*sin(t1)+Y_B);
+    t2 = 0:.05:2*pi;
+    branch = polyshape(p.r_branch.*cos(t2)+X_B, p.r_branch.*sin(t2)+Y_B);
     
-    poly_int = intersect(top_cutter, branch);
-    [C_intx, C_inty] = centroid(poly_int)
-    
-    eventVal = 1;   % when spring at equilibrium distance...
-    isterminal = 0;     % stops the sim
-    direction = 1;      % any direction
+    overlap_shape = intersect(top_cutter, branch);
+
+%     disp('Area of overlap')
+%     disp(area(overlap_shape));
+
+    eventVal = area(overlap_shape)+.000005;   % when spring at equilibrium distance...
+%     eventVal = overlaps(top_cutter, branch);   % when spring at equilibrium distance...
+    isterminal = 1;     % stops the sim
+    direction = 0;      % any direction
 end
 
