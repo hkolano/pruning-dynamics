@@ -9,6 +9,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
     Modified: Hannah Kolano 2021
     %}
 
+    %% Initialization
     % Running time
     t_start = 0;
     t_end = .5;
@@ -18,31 +19,34 @@ function [t_vec, X_vec] = simPruning(X0,p)
     X_vec = zeros(length(X0), length(t_vec));
     sol_set = {};
     
-    free_event_fun = @(t,X)freeBranchEvent(t,X,p);
-    hit_event_fun = @(t,X)contactBranchEvent(t,X,p);
-
-    % Simulation tolerances
-    optionsFree = odeset(...
-        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', free_event_fun);
-    optionsHit = odeset(...
-        'RelTol', 1e-11, 'AbsTol', 1e-11, ...
-        'Events', hit_event_fun, 'MaxStep', .03);
-
-    % Bind dynamics function
-    free_dyn_fun = @(t,X)freedyn(t,X,p);
-    contact_dyn_fun = @(t,X)stoppeddyn(t,X,p);
-    
     % States
     % 1: ball freefloating
     % 2: In contact with top blade
     % 3: In contact with bottom blade
     % 4: In contact with both blades
     p.state = 1;
+    
+    %% Function binding
+    % Event functions
+    free_event_fun = @(t,X)freeBranchEvent(t,X,p);  % When branch is freefloating
+    hit_event_fun = @(t,X)contactBranchEvent(t,X,p); % When in contact with top cutter
 
+    % Simulation tolerances/ ODE Options
+    optionsFree = odeset(...                    % When branch is freefloating
+        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
+        'Events', free_event_fun);
+    optionsHit = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
+        'RelTol', 1e-11, 'AbsTol', 1e-11, ...
+        'Events', hit_event_fun, 'MaxStep', .03);
+
+    % Bind dynamics function
+    free_dyn_fun = @(t,X)freedyn(t,X,p);
+    contact_dyn_fun = @(t,X)stoppeddyn(t,X,p);
+
+    %% Iterate over all time
     while t_start < t_end
         % Simulate the dynamics over a time interval
-        if p.state == 1
+        if p.state == 1 % (branch not in contact)
             sol = ode45(free_dyn_fun, [t_start,t_end], X0, optionsFree);
             disp('Contact! at t = ')
             disp(sol.x(end))
@@ -59,8 +63,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
         % Concatenate solution sets
         sol_set = [sol_set, {sol}];
-        % Setup t_start for the next ode45 call so it is at the end of the
-        % last call
+        % Setup t_start for the next ode45 call so it is at the end of the last call
         t_start = sol.x(end);
         % Set the initial conditions to the end of the last run
         if t_start == t_end
@@ -71,12 +74,9 @@ function [t_vec, X_vec] = simPruning(X0,p)
     end
 %
     % Loop to sample the solution structures and built X_vec
-%     mask = zeros(1,length(t_vec));
     for idx = 1:length(sol_set)
         % This sets up a logical vector so we can perform logical indexing
         t_sample_mask = t_vec >= sol_set{idx}.x(1) & t_vec <= sol_set{idx}.x(end);
-%         disp('Is it empty?')
-%         disp(any(t_sample_mask))
         % Evaluate the idx solution structure only at the applicable times
         if any(t_sample_mask)
             X_eval = deval(sol_set{idx}, t_vec(t_sample_mask));
@@ -112,8 +112,8 @@ function dX = stoppeddyn(t,X,p)
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
     % Restoring forces to the branch
-    F_Kx = -p.kx*X(5); %-p.b*X(6);
-    F_Ky = -p.ky*X(7); %-p.b*X(8);
+    F_Kx = -p.kx*X(5)-p.b*X(6);
+    F_Ky = -p.ky*X(7)-p.b*X(8);
     F_K = sqrt(F_Ky^2+F_Kx^2);
     
     th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from horiz)

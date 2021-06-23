@@ -9,29 +9,15 @@ function [t_vec, X_vec] = simPruning(X0,p)
     Modified: Hannah Kolano 2021
     %}
 
+    %% Initialization
     % Running time
     t_start = 0;
-    t_end = 1;
+    t_end = .5;
     dt = 0.005;
 
     t_vec = t_start:dt:t_end;
     X_vec = zeros(length(X0), length(t_vec));
     sol_set = {};
-    
-    free_event_fun = @(t,X)freeBranchEvent(t,X,p);
-    hit_event_fun = @(t,X)contactBranchEvent(t,X,p);
-
-    % Simulation tolerances
-    optionsFree = odeset(...
-        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', free_event_fun);
-    optionsHit = odeset(...
-        'RelTol', 1e-6, 'AbsTol', 1e-6, ...
-        'Events', hit_event_fun);
-
-    % Bind dynamics function
-    free_dyn_fun = @(t,X)freedyn(t,X,p);
-    contact_dyn_fun = @(t,X)stoppeddyn(t,X,p);
     
     % States
     % 1: ball freefloating
@@ -39,10 +25,28 @@ function [t_vec, X_vec] = simPruning(X0,p)
     % 3: In contact with bottom blade
     % 4: In contact with both blades
     p.state = 1;
+    
+    %% Function binding
+    % Event functions
+    free_event_fun = @(t,X)freeBranchEvent(t,X,p);  % When branch is freefloating
+    hit_event_fun = @(t,X)contactBranchEvent(t,X,p); % When in contact with top cutter
 
+    % Simulation tolerances/ ODE Options
+    optionsFree = odeset(...                    % When branch is freefloating
+        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
+        'Events', free_event_fun);
+    optionsHit = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
+        'RelTol', 1e-11, 'AbsTol', 1e-11, ...
+        'Events', hit_event_fun, 'MaxStep', .03);
+
+    % Bind dynamics function
+    free_dyn_fun = @(t,X)freedyn(t,X,p);
+    contact_dyn_fun = @(t,X)stoppeddyn(t,X,p);
+
+    %% Iterate over all time
     while t_start < t_end
         % Simulate the dynamics over a time interval
-        if p.state == 1
+        if p.state == 1 % (branch not in contact)
             sol = ode45(free_dyn_fun, [t_start,t_end], X0, optionsFree);
             disp('Contact! at t = ')
             disp(sol.x(end))
@@ -54,15 +58,12 @@ function [t_vec, X_vec] = simPruning(X0,p)
             sol = ode45(contact_dyn_fun, [t_start,t_end], X0, optionsHit);
             disp('Came free! at t = ')
             disp(sol.x(end))
-%             disp('Disconnected! at t = ')
-%             disp(sol.x(end))
             p.state = 1;
         end
 
         % Concatenate solution sets
         sol_set = [sol_set, {sol}];
-        % Setup t_start for the next ode45 call so it is at the end of the
-        % last call
+        % Setup t_start for the next ode45 call so it is at the end of the last call
         t_start = sol.x(end);
         % Set the initial conditions to the end of the last run
         if t_start == t_end
@@ -73,12 +74,9 @@ function [t_vec, X_vec] = simPruning(X0,p)
     end
 %
     % Loop to sample the solution structures and built X_vec
-%     mask = zeros(1,length(t_vec));
     for idx = 1:length(sol_set)
         % This sets up a logical vector so we can perform logical indexing
         t_sample_mask = t_vec >= sol_set{idx}.x(1) & t_vec <= sol_set{idx}.x(end);
-%         disp('Is it empty?')
-%         disp(any(t_sample_mask))
         % Evaluate the idx solution structure only at the applicable times
         if any(t_sample_mask)
             X_eval = deval(sol_set{idx}, t_vec(t_sample_mask));
@@ -111,52 +109,39 @@ function dX = freedyn(t,X,p)
 end % dynamics
 
 function dX = stoppeddyn(t,X,p)
-    disp('Time = ')
-    disp(t)
-
-    X_C = X(1);  Y_C = X(3); X_B = X(5);
-    Y_B = X(7);
+    X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
     % Restoring forces to the branch
-    F_Kx = -p.kx*X(5); %-p.b*X(6);
-    F_Ky = -p.ky*X(7); %-p.b*X(8);
+    F_Kx = -p.kx*X(5)-p.b*X(6);
+    F_Ky = -p.ky*X(7)-p.b*X(8);
     F_K = sqrt(F_Ky^2+F_Kx^2);
     
-    th_Fk = atan(F_Ky/F_Kx) % Angle of net restoring force (from horiz)
+    th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from horiz)
 %     th_Fk = atan2(F_Kx, F_Ky);
     
-%   translate the polyshape
+%   translate the polyshapes for cutter and branch
     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
     t1 = 0:.02:2*pi;
     branch_xs = p.r_branch.*cos(t1)+X_B;
     branch_ys = p.r_branch.*sin(t1)+Y_B;
-    branchshape = polyshape(branch_xs, branch_ys)
-    
-    % Find intersect between the cutter and the branch
-    % Check for overlap
-%     disp('Spot check for overlap: ')
-%     disp(overlaps(top_cutter, branch))
-%     if overlaps(top_cutter, branch)
-      
-        poly_int = intersect(top_cutter, branchshape)
-        [C_intx, C_inty] = centroid(poly_int);
+    branchshape = polyshape(branch_xs, branch_ys);
+   
+    % Get intersection of cutter and branch
+    poly_int = intersect(top_cutter, branchshape);
+%     dyn_area = area(poly_int)
+    [C_intx, C_inty] = centroid(poly_int);
 
-        % Find angle of the normal
-        dy = Y_B-C_inty;
-        dx = X_B-C_intx;
-        th_N = atan(dy/dx) % Angle of normal force
-    %     th_N = atan2(dy, dx)
+    % Find angle of the normal
+    dy = Y_B-C_inty;
+    dx = X_B-C_intx;
+    th_N = atan(dy/dx); % Angle of normal force
 
-        % Angle to project F_K onto F_N vector 
-        th_projection = th_N - th_Fk;
+    % Angle to project F_K onto F_N vector 
+    th_projection = th_N - th_Fk;
 
-        F_N = F_K*cos(th_projection);
-        F_Nx = F_N*cos(th_N);
-        F_Ny = F_N*sin(th_N);
-%     else
-%         F_Nx = 0; F_Ny = 0;
-%         disp('No intersecting shape!! Error! Error!')
-%     end
+    F_N = F_K*cos(th_projection);
+    F_Nx = F_N*cos(th_N);
+    F_Ny = F_N*sin(th_N);
 
     dX = zeros(length(X),1);
    dX(1) = X(2);
@@ -167,7 +152,6 @@ function dX = stoppeddyn(t,X,p)
    dX(6) = (F_Kx+F_Nx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny)/p.m_branch;
    
-
 end
 
 
@@ -185,7 +169,7 @@ function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
     
     % translate the polyshape
     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-    t3 = 0:.02:2*pi;
+    t3 = 0:.01:2*pi;
     branch = polyshape(p.r_branch.*cos(t3)+X_B, p.r_branch.*sin(t3)+Y_B);
     overlap_shape = intersect(top_cutter, branch);
     
@@ -194,7 +178,7 @@ function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
 
 %     disp('Area of overlap')
 %     disp(area(overlap_shape));
-    eventVal = area(overlap_shape)-.000002;
+    eventVal = area(overlap_shape)-1e-8;
     isterminal = 1;     % stops the sim
     direction = 1;      % any direction
 end
@@ -209,17 +193,17 @@ function [eventVal, isterminal, direction] = contactBranchEvent(t,X,p)
     
     % translate the polyshape
     top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-    t2 = 0:.05:2*pi;
+    t2 = 0:.01:2*pi;
     branch = polyshape(p.r_branch.*cos(t2)+X_B, p.r_branch.*sin(t2)+Y_B);
     
     overlap_shape = intersect(top_cutter, branch);
 
-%     disp('Area of overlap')
+%     disp('Event Check! Area of overlap')
 %     disp(area(overlap_shape));
 
-    eventVal = area(overlap_shape)+.000005;   % when spring at equilibrium distance...
+    eventVal = area(overlap_shape)-1e-10;   % when spring at equilibrium distance...
 %     eventVal = overlaps(top_cutter, branch);   % when spring at equilibrium distance...
     isterminal = 1;     % stops the sim
-    direction = 0;      % any direction
+    direction = -1;      % any direction
 end
 

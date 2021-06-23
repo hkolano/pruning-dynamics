@@ -6,13 +6,13 @@ clf;
 axis equal;
 hold on;
 
-FPS = 100;
+FPS = 120;
 
 %Prep video writer
 if exportVideo
     filename = 'PruningDemo.mp4';
     v = VideoWriter(filename,'MPEG-4');
-    v.FrameRate = 60;
+    v.FrameRate = FPS;
     open(v);
 end
 
@@ -36,9 +36,10 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     % X(7) (Y_b)
     [xbranch,ybranch] = rtPoints(xbranch,ybranch,0,x_state(5),x_state(7));
     % fill with brown
-    branch = polyshape(xbranch,ybranch)
-    plot(branch, 'FaceColor', [87/255,26/255,7/255])
+    branch = polyshape(xbranch,ybranch);
+    plot(branch, 'FaceColor', [51/255,16/255,8/255], 'FaceAlpha', );
 %     fill(xbranch, ybranch,[87/255,26/255,7/255]);
+
     
     %% Draw cutter joint
     % Update x and y position of joint center
@@ -48,14 +49,53 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 
     %% Draw top cutter
     [xtop,ytop] = rtPoints(p.top_x',p.top_y',0,x_state(1), x_state(3));
-    topcutter = polyshape(xtop, ytop);
-    plot(topcutter, 'FaceColor', [.7,.7,.7]);
-%     fill(xtop,ytop,[.7,.7,.7]);
+%     topcutter = polyshape(xtop, ytop);
+%     plot(topcutter, 'FaceColor', [.7,.7,.7]);
+    fill(xtop,ytop,[.7,.7,.7]);
     
     [xbot,ybot] = rtPoints(p.bot_x',p.bot_y',0,x_state(1), x_state(3));
-    botcutter = polyshape(xbot,ybot);
-    plot(botcutter, 'FaceColor', [.7,.7,.7]);
-%     fill(xbot,ybot,[.8,.8,.8]);
+%     botcutter = polyshape(xbot,ybot);
+%     plot(botcutter, 'FaceColor', [.7,.7,.7]);
+    fill(xbot,ybot,[.7,.7,.7]);
+    
+    %% Draw Force arrows
+%     plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
+    top_cutter = polyshape(p.top_x+x_state(1), p.top_y+x_state(3));
+%     t1 = 0:.1:2*pi;
+%     branch = polyshape(p.r_branch.*cos(t1)+X_B, p.r_branch.*sin(t1)+Y_B);
+    
+    % Find intersect between the cutter and the branch
+    if overlaps(top_cutter, branch)
+%         disp('Overlapping in animation')
+        
+        F_Kx = -p.kx*x_state(5); %-p.b*X(6);
+        F_Ky = -p.ky*x_state(7); %-p.b*X(8);
+        F_K = sqrt(F_Ky^2+F_Kx^2);
+
+        th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from vertical)
+        th_Fk2 = atan2(F_Ky, F_Kx);
+        poly_int = intersect(top_cutter, branch);
+        [C_intx, C_inty] = centroid(poly_int);
+%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
+        
+        % Find angle of the normal
+        dy = x_state(7)-C_inty;
+        dx = x_state(5)-C_intx;
+        th_N = atan(dy/dx); % Angle of normal force
+
+        % Angle to project F_K onto F_N vector 
+        th_projection = th_N - th_Fk;
+%         disp([th_Fk, th_Fk2, th_N, th_projection]);
+
+        F_N = F_K*cos(th_projection);
+        F_Nx = F_N*cos(th_N);
+        F_Ny = F_N*sin(th_N);
+        
+%         quiver(x_state(5), x_state(7), F_Kx, F_Ky, 'r');
+%         quiver(x_state(5), x_state(7), -dx, -dy, 'b');
+%         quiver(x_state(5), x_state(7), F_Nx, F_Ny, 'g');
+%         annotation('arrow', [(C_intx+.2)*10/3, (x_state(5)+.2)*10/3], [(C_inty+.1)*10/2, (x_state(7)+.1)*10/2]);
+    end
     
 
 %% Set proximal link parameters and draw it
@@ -180,11 +220,19 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 %     [xins2,yins2] = rtPoints(xins,yins,pi-theta,rhorn-rbushing,-1);
 %     fill(xins2,yins2,[.5,.5,.5]);
 
+    % Write current time step on plot
+    timetext = ['Time: ',num2str(t_plt)];
+    text(-0.07, 0.035, timetext);
+
     %Set axis, dimensions of figure
-    axis([-.2, .1, -.1, .1]);
+    axis([-.075, .075, -.04, .04]);
+    xlabel('X Position (m)')
+    ylabel('Y Position (m)')
+    title('Pruning Animation')
     fig = gcf;
     fig.Position(3:4) = [752,500];
     movegui
+   
 
     %Draw figure to video framw
     if exportVideo

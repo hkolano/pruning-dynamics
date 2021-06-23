@@ -37,7 +37,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     [xbranch,ybranch] = rtPoints(xbranch,ybranch,0,x_state(5),x_state(7));
     % fill with brown
     branch = polyshape(xbranch,ybranch);
-    plot(branch, 'FaceColor', [87/255,26/255,7/255]);
+    plot(branch, 'FaceColor', [122/255,49/255,7/255], 'FaceAlpha', .9);
 %     fill(xbranch, ybranch,[87/255,26/255,7/255]);
 
     
@@ -59,7 +59,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     fill(xbot,ybot,[.7,.7,.7]);
     
     %% Draw Force arrows
-    plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
+%     plot([0, x_state(5)], [0, x_state(7)], 'r', 'LineWidth', 2)
     top_cutter = polyshape(p.top_x+x_state(1), p.top_y+x_state(3));
 %     t1 = 0:.1:2*pi;
 %     branch = polyshape(p.r_branch.*cos(t1)+X_B, p.r_branch.*sin(t1)+Y_B);
@@ -91,9 +91,9 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
         F_Nx = F_N*cos(th_N);
         F_Ny = F_N*sin(th_N);
         
-        quiver(x_state(5), x_state(7), F_Kx, F_Ky, 'r');
-        quiver(x_state(5), x_state(7), -dx, -dy, 'b');
-        quiver(x_state(5), x_state(7), F_Nx, F_Ny, 'g');
+%         quiver(x_state(5), x_state(7), F_Kx, F_Ky, 'r');
+%         quiver(x_state(5), x_state(7), -dx, -dy, 'b');
+%         quiver(x_state(5), x_state(7), F_Nx, F_Ny, 'g');
 %         annotation('arrow', [(C_intx+.2)*10/3, (x_state(5)+.2)*10/3], [(C_inty+.1)*10/2, (x_state(7)+.1)*10/2]);
     end
     
