@@ -63,13 +63,15 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     top_cutter = polyshape(p.top_x+x_state(1), p.top_y+x_state(3));
 %     t1 = 0:.1:2*pi;
 %     branch = polyshape(p.r_branch.*cos(t1)+X_B, p.r_branch.*sin(t1)+Y_B);
+
+    frict_text = ['Friction: None'];
     
     % Find intersect between the cutter and the branch
     if overlaps(top_cutter, branch)
 %         disp('Overlapping in animation')
         
-        F_Kx = -p.kx*x_state(5); %-p.b*X(6);
-        F_Ky = -p.ky*x_state(7); %-p.b*X(8);
+        F_Kx = -p.kx*x_state(5)-p.b*x_state(6);
+        F_Ky = -p.ky*x_state(7)-p.b*x_state(8);
         F_K = sqrt(F_Ky^2+F_Kx^2);
 
         th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from vertical)
@@ -88,16 +90,41 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 %         disp([th_Fk, th_Fk2, th_N, th_projection]);
 
         F_N = F_K*cos(th_projection);
+        F_rem = F_K*sin(th_projection);
         F_Nx = F_N*cos(th_N);
         F_Ny = F_N*sin(th_N);
         
-%         quiver(x_state(5), x_state(7), F_Kx, F_Ky, 'r');
-%         quiver(x_state(5), x_state(7), -dx, -dy, 'b');
-%         quiver(x_state(5), x_state(7), F_Nx, F_Ny, 'g');
+          if abs(x_state(6)-x_state(2)) < 0.001 && abs(x_state(8)-x_state(4)) < 0.001 % If branch isn't moving, add stiction
+%                disp('Not moving; adding stiction')
+               max_Ff = p.mu_s*F_N;
+               if abs(F_rem) <= max_Ff % If friction can equal the remaining force
+%                    disp('Friction is stopping motion')
+                   F_f = - F_rem;
+                   frict_text = ['Friction: sticking'];
+               else 
+%                    disp('Friction is insufficient; starting to move')
+        %            F_f = 0;
+                   F_f = -max_Ff*sign(F_rem);
+                   frict_text = ['Friction: starting to slide'];
+               end
+           else % If branch is moving, apply kinetic friction
+        %        disp('Branch is moving; adding kinetic friction')
+%                F_f = 0;
+               F_f = -p.mu_k*F_N*sign(F_rem);
+               frict_text = ['Friction: sliding'];
+           end % if stiction
+
+           F_fx = -F_f*sin(th_N);
+           F_fy = F_f*cos(th_N);
+          
+        quiver(x_state(5), x_state(7), F_Kx/10, F_Ky/10, 'r'); % Restoring force to equil.
+%         quiver(x_state(5), x_state(7), -dx, -dy, 'b'); % Normal vector
+        quiver(x_state(5), x_state(7), F_Nx/10, F_Ny/10, 'g'); % Normal force
+        quiver(x_state(5), x_state(7), F_fx/10, F_fy/10, 'm', 'LineWidth', 2); % Friction Force
 %         annotation('arrow', [(C_intx+.2)*10/3, (x_state(5)+.2)*10/3], [(C_inty+.1)*10/2, (x_state(7)+.1)*10/2]);
     end
     
-
+    text(0.04, -0.035, frict_text);
 %% Set proximal link parameters and draw it
 %     %Half-width of proximal link
 %     base_hw = 1/2;
