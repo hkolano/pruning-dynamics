@@ -19,6 +19,13 @@ function [t_vec, X_vec] = simPruning(X0,p)
     X_vec = zeros(length(X0), length(t_vec));
     sol_set = {};
     
+    p.top_shape = polyshape(p.top_x, p.top_y);
+    p.bottom_shape = polyshape(p.bot_x, p.bot_y);
+    t1 = 0:.02:2*pi;
+    branch_xs = p.r_branch.*cos(t1);
+    branch_ys = p.r_branch.*sin(t1);
+    p.branch_shape = polyshape(branch_xs, branch_ys);
+    
     % States
     % 1: ball freefloating
     % 2: In contact with top blade
@@ -45,8 +52,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
-    contact_dyn_top_fun = @(t,X)stoppeddyn(t,X,p,p.top_x, p.top_y);
-    contact_dyn_bottom_fun = @(t,X)stoppeddyn(t,X,p,p.bot_x,p.bot_y);
+    contact_dyn_top_fun = @(t,X)stoppeddyn(t,X,p,p.top_shape);
+    contact_dyn_bottom_fun = @(t,X)stoppeddyn(t,X,p,p.bottom_shape);
 
     %% Iterate over all time
     while t_start < t_end
@@ -128,7 +135,7 @@ function dX = freedyn(t,X,p)
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
-function dX = stoppeddyn(t,X,p, cutterblade_x, cutterblade_y)
+function dX = stoppeddyn(t,X,p,shape)
 
 %     disp('Time: ')
 %     disp(t)
@@ -144,11 +151,13 @@ function dX = stoppeddyn(t,X,p, cutterblade_x, cutterblade_y)
     th_Fk = atan2(F_Ky, F_Kx);
     
 %   translate the polyshapes for cutter and branch
-    cutter = polyshape(cutterblade_x+X_C, cutterblade_y+Y_C);
-    t1 = 0:.02:2*pi;
-    branch_xs = p.r_branch.*cos(t1)+X_B;
-    branch_ys = p.r_branch.*sin(t1)+Y_B;
-    branchshape = polyshape(branch_xs, branch_ys);
+    cutter = translate(shape, X_C, Y_C);
+%     cutter = polyshape(cutterblade_x+X_C, cutterblade_y+Y_C);
+    branchshape = translate(p.branch_shape, X_B, Y_B);
+%     t1 = 0:.02:2*pi;
+%     branch_xs = p.r_branch.*cos(t1)+X_B;
+%     branch_ys = p.r_branch.*sin(t1)+Y_B;
+%     branchshape = polyshape(branch_xs, branch_ys);
    
     % Get intersection of cutter and branch
     poly_int = intersect(cutter, branchshape);
@@ -174,6 +183,7 @@ function dX = stoppeddyn(t,X,p, cutterblade_x, cutterblade_y)
         F_N = F_N - squish_dist^2*p.ksquish;
     end
     
+    % Separate Normal forces into components
     F_Nx = F_N*cos(th_N);
     F_Ny = F_N*sin(th_N);
 
@@ -235,10 +245,11 @@ function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
     X_C = X(1);   Y_C = X(3); X_B = X(5); Y_B = X(7);
     
     % translate the polyshape
-    top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-    bottom_cutter = polyshape(p.bot_x+X_C, p.bot_y+Y_C);
-    t3 = 0:.01:2*pi;
-    branch = polyshape(p.r_branch.*cos(t3)+X_B, p.r_branch.*sin(t3)+Y_B);
+    top_cutter = translate(p.top_shape, X_C, Y_C);
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
+%     t3 = 0:.01:2*pi;
+%     branch = polyshape(p.r_branch.*cos(t3)+X_B, p.r_branch.*sin(t3)+Y_B);
+    branch = translate(p.branch_shape, X_B, Y_B);
     overlap_shape_top = intersect(top_cutter, branch);
     overlap_shape_bot = intersect(bottom_cutter, branch);
     
@@ -258,9 +269,10 @@ function [eventVal, isterminal, direction] = contactTopBranchEvent(t,X,p)
     X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
     
     % translate the polyshape
-    top_cutter = polyshape(p.top_x+X_C, p.top_y+Y_C);
-    t2 = 0:.01:2*pi;
-    branch = polyshape(p.r_branch.*cos(t2)+X_B, p.r_branch.*sin(t2)+Y_B);
+    top_cutter = translate(p.top_shape, X_C, Y_C);
+%     t2 = 0:.01:2*pi;
+%     branch = polyshape(p.r_branch.*cos(t2)+X_B, p.r_branch.*sin(t2)+Y_B);
+    branch = translate(p.branch_shape, X_B, Y_B);
     
     overlap_shape = intersect(top_cutter, branch);
 
@@ -280,10 +292,8 @@ function [eventVal, isterminal, direction] = contactBottomBranchEvent(t,X,p)
     X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
     
     % translate the polyshape
-    bottom_cutter = polyshape(p.bot_x+X_C, p.bot_y+Y_C);
-    t2 = 0:.01:2*pi;
-    branch = polyshape(p.r_branch.*cos(t2)+X_B, p.r_branch.*sin(t2)+Y_B);
-    
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
+    branch = translate(p.branch_shape, X_B, Y_B);
     overlap_shape = intersect(bottom_cutter, branch);
 
 %     disp('Event Check! Area of overlap')

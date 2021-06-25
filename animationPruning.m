@@ -310,7 +310,7 @@ function plot_forces(p, x_state, cutter, branch)
                F_f = -p.mu_k*F_N*sign(F_rem);
                frict_text = ['Friction: sliding'];
            end % if stiction
-           F_f = 0;
+%            F_f = 0;
 
            F_fx = F_f*sin(th_N);
            F_fy = -F_f*cos(th_N);

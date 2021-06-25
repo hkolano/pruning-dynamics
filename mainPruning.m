@@ -25,7 +25,7 @@ p.m_branch = 0.010;       % WAG for mass of the branch
 p.kx = 10;               % WAG for stiffness of branch
 p.ky = 20;              % WAG. Stiffer in y direction b/c tree won't bend
 p.b = .3;                % WAG (branch doesn't really oscillate)
-p.ksquish = 100000;          % If the branch gets squished into the cutter
+p.ksquish = 500000;          % If the branch gets squished into the cutter
 p.bsquish = .3;          % If the branch gets squished into the cutter
 
 % Friction
@@ -35,9 +35,9 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
 Cutter_X_init = -0.05;
-Cutter_Vx_init = .05;
+Cutter_Vx_init = 0.0;
 Cutter_Y_init = 0;
-Cutter_Vy_init = -0.01;
+Cutter_Vy_init = 0.05;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
 [t_vec, X_vec] = simPruning(X0,p);
