@@ -38,6 +38,9 @@ function [t_vec, X_vec] = simPruning(X0,p)
     free_event_fun = @(t,X)freeBranchEvent(t,X,p);  % When branch is freefloating
     hit_top_event_fun = @(t,X)contactTopBranchEvent(t,X,p); % When in contact with top cutter
     hit_bottom_event_fun = @(t,X)contactBottomBranchEvent(t,X,p);
+    
+%     % Friction
+%     fric_fun = @(vel_mag, FN)
 
     % Simulation tolerances/ ODE Options
     optionsFree = odeset(...                    % When branch is freefloating
@@ -177,7 +180,7 @@ function dX = stoppeddyn(t,X,p,shape)
     F_N = -F_K*cos(th_projection);
     F_rem = F_K*sin(th_projection); % Net remaining force, tangent to surface
     
-    % Squish force
+    % Squish force (to account for concave shapes)
     squish_dist = p.r_branch-dist_to_overlap; % 
     if squish_dist > 0
         F_N = F_N - squish_dist^2*p.ksquish;
@@ -192,43 +195,47 @@ function dX = stoppeddyn(t,X,p,shape)
    dX(3) = X(4);
    dX(5) = X(6);
    dX(7) = X(8);
-%    disp('Current branch X and Y vels: ')
-%    disp(X(6))
-%    disp(X(8))
-%    disp('Current cutter X and Y vels: ')
-%    disp(X(2))
-%    disp(X(4))
-%    disp('Velocity Differences')
-%    disp(X(6)-X(2))
-%    disp(X(8)-X(4))
    
-%    if abs(X(6)-X(2)) < 0.001 && abs(X(8)-X(4)) < 0.001 % If branch isn't moving, add stiction
-% %        disp('Not moving; adding stiction')
-%        max_Ff = p.mu_s*F_N;
-%        if abs(F_rem) <= max_Ff % If friction can equal the remaining force
-% %            disp('Friction is stopping motion')
-%            F_f = - F_rem;
-%        else 
-% %            disp('Friction is insufficient; starting to move')
-% %            F_f = 0;
-%            F_f = -max_Ff*sign(F_rem);
-%        end
-%    else % If branch is moving, apply kinetic friction
-% %        disp('Branch is moving; adding kinetic friction')
-% %        F_f = 0;
-%        F_f = -p.mu_k*F_N*sign(F_rem);
-%    end % if stiction
-   F_f = 0;
+    relVelX = X(6)-X(2);
+    relVelY = X(8)-X(4);
+    th_relV_ang = atan2(relVelY, relVelX);
+    relVel_mag = sqrt(relVelY^2 + relVelX^2);
+    Vel_B_Par = relVel_mag*sin(th_N-th_relV_ang);
+    Vel_B_ParX = Vel_B_Par*sin(th_N);
+    Vel_B_ParY = -Vel_B_Par*cos(th_N);
+   
+    F_f = eval_friction(p, relVel_mag, F_N);
    
 %    disp(F_f)
-   F_fx = F_f*sin(th_N);
-   F_fy = -F_f*cos(th_N);
+   F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX);
+   F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
    
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
+end
+
+function F_f = eval_friction(p, vel_mag, F_N)
+%     F_f = 0;
+    if abs(vel_mag) < 0.001 % If branch isn't moving, add stiction
+%        disp('Not moving; adding stiction')]
+       F_f = 0;
+%        max_Ff = p.mu_s*F_N;
+%        if abs(F_rem) <= max_Ff % If friction can equal the remaining force
+% %            disp('Friction is stopping motion')
+%            F_f = F_rem;
+%        else 
+% %            disp('Friction is insufficient; starting to move')
+% %            F_f = 0;
+%            F_f = max_Ff;
+%        end
+   else % If branch is moving, apply kinetic friction
+%        disp('Branch is moving; adding kinetic friction')
+%        F_f = 0;
+       F_f = p.mu_k*F_N;
+   end % if stiction
 end
 
 

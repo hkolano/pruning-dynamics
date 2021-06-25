@@ -7,6 +7,7 @@ axis equal;
 hold on;
 
 FPS = 120;
+perp_forces = [];
 
 %Prep video writer
 if exportVideo
@@ -205,9 +206,9 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     % Write current time step on plot
     timetext = ['Time: ',num2str(t_plt)];
     text(-0.07, 0.035, timetext);
-    
-    disp('Time = ')
-    disp(t_plt)
+%     
+%     disp('Time = ')
+%     disp(t_plt)
 
     %Set axis, dimensions of figure
     axis([-.075, .075, -.04, .04]);
@@ -284,10 +285,10 @@ function plot_forces(p, x_state, cutter, branch)
         F_Nx = F_N*cos(th_N);%*-sign(dx);
         F_Ny = F_N*sin(th_N);%*-sign(dy);
         
-%         disp('X dir')
-%         disp(F_Kx + F_Nx)
-%         disp('Y dir')
-%         disp(F_Ky + F_Ny)
+        Branch_V_ang = atan2(x_state(8), x_state(6))
+        Cutter_V_ang = atan2(x_state(4), x_state(2))
+        Branch_Vel = sqrt(x_state(8)^2+x_state(6)^2);
+        Branch_Vel_Paralle
         
         
           if abs(x_state(6)-x_state(2)) < 0.001 && abs(x_state(8)-x_state(4)) < 0.001 % If branch isn't moving, add stiction
@@ -309,18 +310,19 @@ function plot_forces(p, x_state, cutter, branch)
                F_f = -p.mu_k*F_N*sign(F_rem);
                frict_text = ['Friction: sliding'];
            end % if stiction
+%            F_f = 0;
 
            F_fx = F_f*sin(th_N);
            F_fy = -F_f*cos(th_N);
-           F_
            
         tot_Fx = F_Kx + F_Nx;
         tot_Fy = F_Ky + F_Ny;
         ang_tot_F = atan2(tot_Fx, tot_Fy);
         relative_ang = th_N - ang_tot_F;
-        F_proj = sqrt(tot_Fx^2+tot_Fy^2)*cos(relative_ang)
+        F_proj = sqrt(tot_Fx^2+tot_Fy^2)*cos(relative_ang);
         
-        quiver(x_state(5), x_state(7), tot_Fx, tot_Fy, 'k', 'LineWidth', 2)
+%         quiver(x_state(5), x_state(7), tot_Fx, tot_Fy, 'k', 'LineWidth', 2)
+        quiver(x_state(5), x_state(7), x_state(6), x_state(8), 'k', 'LineWidth', 2)
         quiver(x_state(5), x_state(7), F_Kx/10, F_Ky/10, 'r', 'LineWidth', 2); % Restoring force to equil.
 %         quiver(x_state(5), x_state(7), -dx, -dy, 'b', 'LineWidth', 2); % Normal vector
         quiver(x_state(5), x_state(7), F_Nx/10, F_Ny/10, 'g', 'LineWidth', 2); % Normal force

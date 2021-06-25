@@ -26,7 +26,7 @@ p.kx = 10;               % WAG for stiffness of branch
 p.ky = 20;              % WAG. Stiffer in y direction b/c tree won't bend
 p.b = .3;                % WAG (branch doesn't really oscillate)
 p.ksquish = 500000;          % If the branch gets squished into the cutter
-p.bsquish = .3;          % If the branch gets squished into the cutter
+% p.bsquish = .3;          % If the branch gets squished into the cutter
 
 % Friction
 p.mu_s = 0.6;           % WAG for wood/metal from Wikipedia
@@ -50,7 +50,7 @@ X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0
 % title('Displacement')
 
 %% Animate
-exportVideo = false;
-playbackRate = 1;
-animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
+% exportVideo = false;
+% playbackRate = 1;
+% animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
 
