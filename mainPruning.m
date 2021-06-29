@@ -35,9 +35,9 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
 Cutter_X_init = -0.05;
-Cutter_Vx_init = 0.03;
+Cutter_Vx_init = 0.0;
 Cutter_Y_init = 0;
-Cutter_Vy_init = -0.04;
+Cutter_Vy_init = 0.04;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
 [t_vec, X_vec] = simPruning(X0,p);
