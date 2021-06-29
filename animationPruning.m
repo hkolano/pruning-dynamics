@@ -70,10 +70,10 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     % Find intersect between the cutter and the branch
     if top_hit == 1
 %         disp('Animation: top hit')
-        plot_forces(p, x_state, top_cutter, branch)
+        plot_forces(p, x_state, top_cutter, branch, 1)
     elseif bot_hit == 1
 %         disp('Animation: bottom hit')
-        plot_forces(p, x_state, bottom_cutter, branch)
+        plot_forces(p, x_state, bottom_cutter, branch, -1)
     else
 %         disp('No contact')
         lowright_text = ['Friction: None'];
@@ -261,7 +261,7 @@ function [nx,ny] = rtPoints(x,y,theta,dx,dy)
 
 end
 
-function plot_forces(p, x_state, cutter, branch)
+function plot_forces(p, x_state, cutter, branch, dir)
         F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
         F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
         F_K = sqrt(F_Ky^2+F_Kx^2);
@@ -293,29 +293,22 @@ function plot_forces(p, x_state, cutter, branch)
         Vel_B_ParX = Vel_B_Par*sin(th_N);
         Vel_B_ParY = -Vel_B_Par*cos(th_N);
         
-          if abs(relVel_mag) < 0.001 % If branch isn't moving, add stiction
+          if relVel_mag < 0.001 % If branch isn't moving, add stiction
 %                disp('Not moving; adding stiction')
-               max_Ff = abs(p.mu_s*F_N);
-               if abs(F_rem) <= max_Ff % If friction can equal the remaining force
-%                    disp('Friction is stopping motion')
-                   F_f = F_rem;
-                   frict_text = ['Friction: sticking'];
-               else 
-%                    disp('Friction is insufficient; starting to move')
-        %            F_f = 0;
-                   F_f = max_Ff;
-                   frict_text = ['Friction: starting to slide'];
-               end
+                frict_text = ['Friction: stiction'];
+                max_Ff = abs(p.mu_s*F_N);
+%                 disp(F_rem);
+                F_f = max_Ff*(-0.0216*(F_rem/max_Ff)^5 - 1E-04*(F_rem/max_Ff)^4 + 0.2475*(F_rem/max_Ff)^3 + 0.0004*(F_rem/max_Ff)^2 - 1.136*(F_rem/max_Ff) - 0.0002);
            else % If branch is moving, apply kinetic friction
         %        disp('Branch is moving; adding kinetic friction')
 %                F_f = 0;
-               F_f = p.mu_k*F_N;
+               F_f = abs(p.mu_k*F_N);
                frict_text = ['Friction: sliding'];
            end % if stiction
 %            F_f = 0;
 
-           F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX);
-           F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY);
+           F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX)*dir;
+           F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY)*dir;
            
 %         tot_Fx = F_Kx + F_Nx;
 %         tot_Fy = F_Ky + F_Ny;
@@ -323,7 +316,7 @@ function plot_forces(p, x_state, cutter, branch)
 %         relative_ang = th_N - ang_tot_F;
 %         F_proj = sqrt(tot_Fx^2+tot_Fy^2)*cos(relative_ang);
         
-        quiver(x_state(5), x_state(7), relVelX, relVelY, 'c', 'LineWidth', 2)
+%         quiver(x_state(5), x_state(7), relVelX, relVelY, 'c', 'LineWidth', 2)
         quiver(x_state(5), x_state(7), Vel_B_ParX, Vel_B_ParY, 'k', 'LineWidth', 2)
         quiver(x_state(5), x_state(7), F_Kx/10, F_Ky/10, 'r', 'LineWidth', 2); % Restoring force to equil.
 %         quiver(x_state(5), x_state(7), -dx, -dy, 'b', 'LineWidth', 2); % Normal vector
