@@ -26,6 +26,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
     branch_ys = p.r_branch.*sin(t1);
     p.branch_shape = polyshape(branch_xs, branch_ys);
     
+%     p.th_N = 0; % ODE will keep track of normal vector angle
+    
     % States
     % 1: ball freefloating
     % 2: In contact with top blade
@@ -75,8 +77,9 @@ function [t_vec, X_vec] = simPruning(X0,p)
             end
         elseif p.state == 2 % p.state == 2 (in contact with top blade)
             disp('Contact with top -- starting contact dynamics')
-            X0(6) = X0(2); % Branch instantaneously matches velocity of cutter
-            X0(8) = X0(4); 
+            X0 = calc_instant_contact_vels(p, X0, p.top_shape);
+%             X0(6) = X0(2); % Branch instantaneously matches velocity of cutter
+%             X0(8) = X0(4); 
             sol = ode45(contact_dyn_top_fun, [t_start,t_end], X0, optionsHitTop);
             disp('Came free at t = ')
             disp(sol.x(end))
@@ -139,9 +142,6 @@ function dX = freedyn(t,X,p)
 end % dynamics
 
 function dX = stoppeddyn(t,X,p,shape)
-
-%     disp('Time: ')
-%     disp(t)
     
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
@@ -153,25 +153,8 @@ function dX = stoppeddyn(t,X,p,shape)
 %     th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from horiz)
     th_Fk = atan2(F_Ky, F_Kx);
     
-%   translate the polyshapes for cutter and branch
-    cutter = translate(shape, X_C, Y_C);
-%     cutter = polyshape(cutterblade_x+X_C, cutterblade_y+Y_C);
-    branchshape = translate(p.branch_shape, X_B, Y_B);
-%     t1 = 0:.02:2*pi;
-%     branch_xs = p.r_branch.*cos(t1)+X_B;
-%     branch_ys = p.r_branch.*sin(t1)+Y_B;
-%     branchshape = polyshape(branch_xs, branch_ys);
-   
-    % Get intersection of cutter and branch
-    poly_int = intersect(cutter, branchshape);
-%     dyn_area = area(poly_int)
-    [C_intx, C_inty] = centroid(poly_int);
-
-    % Find angle of the normal
-    dy = C_inty-Y_B;
-    dx = C_intx-X_B;
-    dist_to_overlap = sqrt(dy^2+dx^2);
-    th_N = atan2(dy, dx); % Angle of normal force
+    % Calculate the current Normal angle th_N
+    [th_N, dist_to_overlap] = calc_normal_angle(p, X, shape);
 
     % Angle to project F_K onto F_N vector 
     th_projection = th_Fk-th_N;
@@ -191,10 +174,7 @@ function dX = stoppeddyn(t,X,p,shape)
     F_Ny = F_N*sin(th_N);
 
     dX = zeros(length(X),1);
-   dX(1) = X(2);
-   dX(3) = X(4);
-   dX(5) = X(6);
-   dX(7) = X(8);
+    dX(1) = X(2);  dX(3) = X(4);  dX(5) = X(6);  dX(7) = X(8);
    
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
@@ -217,25 +197,54 @@ function dX = stoppeddyn(t,X,p,shape)
    
 end
 
+function [th_N, dist_to_overlap] = calc_normal_angle(p, x_state, shape)
+    % Translate cutter and branch
+    cutter = translate(shape, x_state(1), x_state(3));
+    branchshape = translate(p.branch_shape, x_state(5), x_state(7));
+    % Find center of the overlapping shape
+    poly_int = intersect(cutter, branchshape);
+    [C_intx, C_inty] = centroid(poly_int);
+    
+    % Distance vectors from centroid of overlap to center of branch
+    dy = C_inty-x_state(7);
+    dx = C_intx-x_state(5);
+    dist_to_overlap = sqrt(dy^2+dx^2);
+    th_N = atan2(dy, dx); % Angle of normal force
+end
+
 function F_f = eval_friction(p, vel_mag, F_N)
-%     F_f = 0;
-    if abs(vel_mag) < 0.001 % If branch isn't moving, add stiction
-%        disp('Not moving; adding stiction')]
-       F_f = 0;
-%        max_Ff = p.mu_s*F_N;
-%        if abs(F_rem) <= max_Ff % If friction can equal the remaining force
-% %            disp('Friction is stopping motion')
-%            F_f = F_rem;
-%        else 
-% %            disp('Friction is insufficient; starting to move')
-% %            F_f = 0;
-%            F_f = max_Ff;
-%        end
-   else % If branch is moving, apply kinetic friction
-%        disp('Branch is moving; adding kinetic friction')
+    F_f = 0;
+%     if vel_mag < 0.001 % If branch isn't moving, add stiction
+% %        disp('Not moving; adding stiction')]
 %        F_f = 0;
-       F_f = p.mu_k*F_N;
-   end % if stiction
+% %        max_Ff = p.mu_s*F_N;
+% %        if abs(F_rem) <= max_Ff % If friction can equal the remaining force
+% % %            disp('Friction is stopping motion')
+% %            F_f = F_rem;
+% %        else 
+% % %            disp('Friction is insufficient; starting to move')
+% % %            F_f = 0;
+% %            F_f = max_Ff;
+% %        end
+%    else % If branch is moving, apply kinetic friction
+% %        disp('Branch is moving; adding kinetic friction')
+% %        F_f = 0;
+%        F_f = p.mu_k*F_N;
+%    end % if stiction
+end
+
+function X = calc_instant_contact_vels(p, x_state, shape)
+    X = x_state;
+    [th_N, ~] = calc_normal_angle(p, x_state, shape);
+    VC_X = x_state(2); % x velocity of the cutter
+    VC_Y = x_state(4); % y velocity of the cutter
+    
+    th_vc = atan2(VC_Y, VC_X); % Angle of the cutter's velocity
+    th_proj = th_vc -th_N; % Projection angle between velocity and normal
+    
+    norm_vel = sqrt(VC_X^2+VC_Y^2)*cos(th_proj);
+    X(6) = norm_vel*cos(th_N);
+    X(8) = norm_vel*sin(th_N); 
 end
 
 
