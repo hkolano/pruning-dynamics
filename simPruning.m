@@ -62,11 +62,11 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
-    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 1);
-    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, -1);
-    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 1);
-    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, -1);
-    both_dyn_fun = @(t,X)bothhit(t,X,p)
+    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape);
+    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape);
+    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape);
+    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape);
+    both_dyn_fun = @(t,X)bothhitdyn(t,X,p);
 
     %% Iterate over all time
     while t_start < t_end
@@ -131,7 +131,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
             end
         else % p.state = 6
             disp('Contact with both!')
-            break
+            sol = ode45(both_dyn_fun, [t_start, t_end], X0);
         end
 
         % Concatenate solution sets
@@ -183,7 +183,7 @@ function dX = freedyn(t,X,p)
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
-function dX = stickingdyn(t,X,p,shape, dir)
+function dX = stickingdyn(t,X,p,shape)
 %     disp('Time = ')
 %     disp(t)
     
@@ -244,7 +244,7 @@ function dX = stickingdyn(t,X,p,shape, dir)
    
 end
 
-function dX = slidingdyn(t,X,p,shape, dir)
+function dX = slidingdyn(t,X,p,shape)
     
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
@@ -297,6 +297,11 @@ function dX = slidingdyn(t,X,p,shape, dir)
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
+end
+
+function dX = bothhitdyn(t,X,p)
+    dX = zeros(length(X),1);
+    dX(1) = X(2);  dX(3) = X(4);  dX(5) = X(2);  dX(7) = X(4);
 end
 
 function [th_N, dist_to_overlap] = calc_normal_angle(p, x_state, shape)

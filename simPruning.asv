@@ -62,10 +62,11 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
-    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 1);
-    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, -1);
-    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 1);
-    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, -1);
+    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape);
+    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape);
+    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape);
+    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape);
+    both_dyn_fun = @(t,X)bothhitdyn(t,X,p);
 
     %% Iterate over all time
     while t_start < t_end
@@ -146,6 +147,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
     end
 %
     % Loop to sample the solution structures and built X_vec
+    t_vec = 0:dt:t_start;
+    X_vec = zeros(length(X0), length(t_vec));
     for idx = 1:length(sol_set)
         % This sets up a logical vector so we can perform logical indexing
         t_sample_mask = t_vec >= sol_set{idx}.x(1) & t_vec <= sol_set{idx}.x(end);
@@ -180,7 +183,7 @@ function dX = freedyn(t,X,p)
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
-function dX = stickingdyn(t,X,p,shape, dir)
+function dX = stickingdyn(t,X,p,shape)
 %     disp('Time = ')
 %     disp(t)
     
@@ -231,8 +234,8 @@ function dX = stickingdyn(t,X,p,shape, dir)
      
 %     F_f = 0;
 %    disp(F_f)
-   F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX)*dir;
-   F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY)*dir;
+   F_fx = abs(F_f*sin(th_N))*sign(-Vel_B_ParX);
+   F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
    
@@ -241,7 +244,7 @@ function dX = stickingdyn(t,X,p,shape, dir)
    
 end
 
-function dX = slidingdyn(t,X,p,shape, dir)
+function dX = slidingdyn(t,X,p,shape)
     
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
@@ -286,14 +289,18 @@ function dX = slidingdyn(t,X,p,shape, dir)
 
     F_f = abs(p.mu_k*F_N);
 %    disp(F_f)
-   F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX)*dir;
-   F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY)*dir;
+    F_fx = abs(F_f*sin(th_N))*sign(-Vel_B_ParX);
+    F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
    
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
+end
+
+function dX = bothhitdyn(t,X,p)
+
 end
 
 function [th_N, dist_to_overlap] = calc_normal_angle(p, x_state, shape)

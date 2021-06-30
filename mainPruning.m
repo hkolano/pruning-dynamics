@@ -37,7 +37,7 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 Cutter_X_init = -0.05;
 Cutter_Vx_init = 0.05;
 Cutter_Y_init = 0;
-Cutter_Vy_init = 0.02;
+Cutter_Vy_init = 0.01;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
 [t_vec, X_vec] = simPruning(X0,p);
