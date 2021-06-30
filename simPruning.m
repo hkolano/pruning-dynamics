@@ -15,8 +15,6 @@ function [t_vec, X_vec] = simPruning(X0,p)
     t_end = .8;
     dt = 0.005;
 
-    t_vec = t_start:dt:t_end;
-    X_vec = zeros(length(X0), length(t_vec));
     sol_set = {};
     
     p.top_shape = polyshape(p.top_x, p.top_y);
@@ -59,8 +57,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', bot_sticking_event_fun, 'MaxStep', .002);
     optionsBottomSliding = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
-        'RelTol', 1e-11, 'AbsTol', 1e-11, ...
-        'Events', bot_sliding_event_fun, 'MaxStep', .002);
+        'RelTol', 1e-5, 'AbsTol', 1e-5, ...
+        'Events', bot_sliding_event_fun, 'MaxStep', .001);
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
@@ -68,6 +66,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
     bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, -1);
     top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 1);
     bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, -1);
+    both_dyn_fun = @(t,X)bothhit(t,X,p)
 
     %% Iterate over all time
     while t_start < t_end
@@ -103,6 +102,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
                 p.state = 1; % to Free
             elseif sol.ie == 2
                 p.state = 2; % to Top/Sticking
+            elseif sol.ie == 3
+                p.state = 6;
             end
         elseif p.state == 4 %(sticking to bottom blade)
             disp('Contact with bottom -- sticking')
@@ -125,7 +126,12 @@ function [t_vec, X_vec] = simPruning(X0,p)
                 p.state = 1; % to Free
             elseif sol.ie == 2
                 p.state = 4; % to Bottom/sticking
+            elseif sol.ie == 3
+                p.state = 6;
             end
+        else % p.state = 6
+            disp('Contact with both!')
+            break
         end
 
         % Concatenate solution sets
@@ -141,6 +147,8 @@ function [t_vec, X_vec] = simPruning(X0,p)
     end
 %
     % Loop to sample the solution structures and built X_vec
+    t_vec = 0:dt:t_start;
+    X_vec = zeros(length(X0), length(t_vec));
     for idx = 1:length(sol_set)
         % This sets up a logical vector so we can perform logical indexing
         t_sample_mask = t_vec >= sol_set{idx}.x(1) & t_vec <= sol_set{idx}.x(end);
@@ -226,8 +234,8 @@ function dX = stickingdyn(t,X,p,shape, dir)
      
 %     F_f = 0;
 %    disp(F_f)
-   F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX)*dir;
-   F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY)*dir;
+   F_fx = abs(F_f*sin(th_N))*sign(-Vel_B_ParX);
+   F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
    
@@ -281,8 +289,8 @@ function dX = slidingdyn(t,X,p,shape, dir)
 
     F_f = abs(p.mu_k*F_N);
 %    disp(F_f)
-   F_fx = F_f*sin(th_N)*sign(-Vel_B_ParX)*dir;
-   F_fy = -F_f*cos(th_N)*sign(-Vel_B_ParY)*dir;
+    F_fx = abs(F_f*sin(th_N))*sign(-Vel_B_ParX);
+    F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
    
@@ -384,8 +392,10 @@ function [eventVal, isterminal, direction] = contactTopSlidingEvent(t,X,p)
     
     % translate the polyshape
     top_cutter = translate(p.top_shape, X_C, Y_C);
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
     branch = translate(p.branch_shape, X_B, Y_B);
-    overlap_shape = intersect(top_cutter, branch);
+    overlap_shape_top = intersect(top_cutter, branch);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
     
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
@@ -398,9 +408,10 @@ function [eventVal, isterminal, direction] = contactTopSlidingEvent(t,X,p)
 
     % 1: back to free
     % 2: to sticking
-    eventVal = [area(overlap_shape)-5e-9, relVel_mag-.001];   % when spring at equilibrium distance...
-    isterminal = [1, 1];     % stops the sim
-    direction = [-1, -1];      % direction
+    % 3: to both
+    eventVal = [area(overlap_shape_top)-5e-9, relVel_mag-.001, area(overlap_shape_bottom)-5e-9];   % when spring at equilibrium distance...
+    isterminal = [1, 1, 1];     % stops the sim
+    direction = [-1, -1, 1];      % direction
 end
 
 function [eventVal, isterminal, direction] = contactBottomStickingEvent(t,X,p)
@@ -437,8 +448,10 @@ function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
     
     % translate the polyshape
     bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
+    top_cutter = translate(p.top_shape, X_C, Y_C);
     branch = translate(p.branch_shape, X_B, Y_B);
-    overlap_shape = intersect(bottom_cutter, branch);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
+    overlap_shape_top = intersect(top_cutter, branch);
     
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
@@ -448,8 +461,8 @@ function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
 %     disp('Event Check! Area of overlap')
 %     disp(area(overlap_shape));
 
-    eventVal = [area(overlap_shape)-5e-9, relVel_mag-.001];   % when spring at equilibrium distance...
-    isterminal = [1 1];     % stops the sim
-    direction = [-1 -1];      % any direction
+    eventVal = [area(overlap_shape_bottom)-5e-9, relVel_mag-.001, area(overlap_shape_top)-5e-9];   % when spring at equilibrium distance...
+    isterminal = [1 1 1];     % stops the sim
+    direction = [-1 -1 1];      % any direction
 end
 
