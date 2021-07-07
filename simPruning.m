@@ -189,13 +189,8 @@ function dX = stickingdyn(t,X,p,shape, is_bottom)
     
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
-    % Restoring forces to the branch
-    F_Kx = -p.kx*X_B;
-    F_Ky = -p.ky*Y_B;
-    F_K = sqrt(F_Ky^2+F_Kx^2);
-    
-    % Angle of restoring force (from +x)
-    th_Fk = atan2(F_Ky, F_Kx);
+%     % Restoring forces to the branch
+    [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
     % Calculate the current Normal angle th_N
     [th_N, dist_to_overlap, C_intX, C_intY] = calc_normal_angle(p, X, shape);
@@ -265,12 +260,7 @@ function dX = slidingdyn(t,X,p,shape, is_bottom)
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
     % Restoring forces to the branch
-    F_Kx = -p.kx*X(5);%-p.b*X(6);
-    F_Ky = -p.ky*X(7);%-p.b*X(8);
-    F_K = sqrt(F_Ky^2+F_Kx^2);
-    
-%     th_Fk = atan(F_Ky/F_Kx); % Angle of net restoring force (from horiz)
-    th_Fk = atan2(F_Ky, F_Kx);
+    [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
     % Calculate the current Normal angle th_N
     [th_N, dist_to_overlap, C_intX, C_intY] = calc_normal_angle(p, X, shape);
@@ -339,8 +329,7 @@ function dX = bothhitdyn(t,x_state,p)
     bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
     branch = translate(p.branch_shape, x_state(5), x_state(7));
     
-    F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
-    F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
+    [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
     
     poly_int_top = intersect(top_cutter, branch);
     poly_int_bottom = intersect(bottom_cutter, branch);

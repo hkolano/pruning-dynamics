@@ -25,5 +25,5 @@ function wrench = getForceTorqueMeasurement(p, x_state, Forces, ContactPoints)
     top_wrench_in_ee = Adjoint(TransInv(T_ee_top))'*wrench_in_t;
     bottom_wrench_in_ee = Adjoint(TransInv(T_ee_bottom))'*wrench_in_b;
     
-    wrench = top_wrench_in_ee + bottom_wrench_in_ee
+    wrench = top_wrench_in_ee + bottom_wrench_in_ee;
 end

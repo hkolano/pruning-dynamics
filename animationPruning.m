@@ -263,11 +263,9 @@ function [nx,ny] = rtPoints(x,y,theta,dx,dy)
 end
 
 function plot_forces(p, x_state, cutter, branch, dir)
-        F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
-        F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
-        F_K = sqrt(F_Ky^2+F_Kx^2);
-
-        th_Fk = atan2(F_Ky,F_Kx); % Angle of net restoring force (from +x)
+    % Get restoring forces    
+    [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, x_state);
+    
         poly_int = intersect(cutter, branch);
         [C_intx, C_inty] = centroid(poly_int);
 %         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
@@ -328,8 +326,8 @@ function plot_forces(p, x_state, cutter, branch, dir)
 end
 
 function plot_forces_attached(p, x_state, top_cutter, bottom_cutter, branch)
-    F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
-    F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
+    % Get restoring forces
+    [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
 
     poly_int_top = intersect(top_cutter, branch);
     poly_int_bottom = intersect(bottom_cutter, branch);

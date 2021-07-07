@@ -100,33 +100,33 @@ for i = 1:length(t_vec)
 %     
 end
 
-%% X Forces
-figure
-plot(t_vec, F_vec(1,:))
-hold on
-plot(t_vec, F_vec(3,:))
-plot(t_vec, F_vec(5,:))
-plot(t_vec, F_vec(7,:))
-plot(t_vec, F_vec(1,:)+F_vec(3,:)+F_vec(5,:)+F_vec(7,:), 'k')
-xlabel('Time (s)')
-ylabel('X forces (N)')
-legend('Restoring X', 'Top Normal X', 'Bottom Normal X', 'Friction X', 'Total')
-title('Net X Forces')
+%% Plot X Forces
+% figure
+% plot(t_vec, F_vec(1,:))
+% hold on
+% plot(t_vec, F_vec(3,:))
+% plot(t_vec, F_vec(5,:))
+% plot(t_vec, F_vec(7,:))
+% plot(t_vec, F_vec(1,:)+F_vec(3,:)+F_vec(5,:)+F_vec(7,:), 'k')
+% xlabel('Time (s)')
+% ylabel('X forces (N)')
+% legend('Restoring X', 'Top Normal X', 'Bottom Normal X', 'Friction X', 'Total')
+% title('Net X Forces')
 
-%% X Forces
-figure
-plot(t_vec, F_vec(2,:))
-hold on
-plot(t_vec, F_vec(4,:))
-plot(t_vec, F_vec(6,:))
-plot(t_vec, F_vec(8,:))
-plot(t_vec, F_vec(2,:)+F_vec(4,:)+F_vec(6,:)+F_vec(8,:), 'k')
-xlabel('Time (s)')
-ylabel('Y forces (N)')
-legend('Restoring Y', 'Top Normal Y', 'Bottom Normal Y', 'Friction Y', 'Total')
-title('Net Y Forces')
+%% Plot Y Forces
+% figure
+% plot(t_vec, F_vec(2,:))
+% hold on
+% plot(t_vec, F_vec(4,:))
+% plot(t_vec, F_vec(6,:))
+% plot(t_vec, F_vec(8,:))
+% plot(t_vec, F_vec(2,:)+F_vec(4,:)+F_vec(6,:)+F_vec(8,:), 'k')
+% xlabel('Time (s)')
+% ylabel('Y forces (N)')
+% legend('Restoring Y', 'Top Normal Y', 'Bottom Normal Y', 'Friction Y', 'Total')
+% title('Net Y Forces')
 
-%% Wrenches
+%% Plot Wrenches
 figure
 plot(t_vec, wrench_vec(1,:))
 hold on
@@ -137,15 +137,11 @@ xlabel('Time (s)')
 legend('Mx', 'My', 'Mz', 'X', 'Y', 'Z')
 title('Wrench At Sensor')
 
-
-
 %% FUNCTIONS
 function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_cutter, branch)
-    F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
-    F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
-    F_K = sqrt(F_Ky^2+F_Kx^2);
+    % Get restoring Forces of branch
+    [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
     
-    th_Fk = atan2(F_Ky,F_Kx); % Angle of net restoring force (from +x)
     poly_int_top = intersect(top_cutter, branch);
     poly_int_bottom = intersect(bottom_cutter, branch);
     [C_intx_top, C_inty_top] = centroid(poly_int_top);
@@ -182,11 +178,9 @@ function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_c
 end
 
 function [Forces, wrench] = get_forces(p, x_state, cutter, branch)
-        F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
-        F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
-        F_K = sqrt(F_Ky^2+F_Kx^2);
-
-        th_Fk = atan2(F_Ky,F_Kx); % Angle of net restoring force (from +x)
+    % Get restoring forces of branch
+    [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, x_state);
+    
         poly_int = intersect(cutter, branch);
         [C_intx, C_inty] = centroid(poly_int);
 %         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
