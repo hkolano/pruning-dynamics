@@ -54,6 +54,9 @@ T_cutpoint_cutjoint = [1 0 0 -.0137;
             0 0 0 1]; 
 p.T_ee_cutter = T_ee_cutpoint*T_cutpoint_cutjoint;
 
+%% Anonymous functions
+ctlr_fun = @(t,wrench,X) controllerPruning(t,wrench,X);
+
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
 Cutter_X_init = -0.05;
@@ -62,7 +65,7 @@ Cutter_Y_init = 0;
 Cutter_Vy_init = 0.005;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
-[t_vec, X_vec] = simPruning(X0,p);
+[t_vec, X_vec] = simPruning(X0,p,ctlr_fun);
 
 
 %% Animate

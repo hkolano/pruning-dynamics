@@ -1,5 +1,0 @@
-X = [0 0 0 0 0 0 0 0];
-C = [.0 .0035 0 0];
-F = [0 1 0 0 0 0 0 0];
-
-wrench = getForceTorqueMeasurement(p, X, F, C)

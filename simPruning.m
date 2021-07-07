@@ -1,4 +1,4 @@
-function [t_vec, X_vec] = simPruning(X0,p)  
+function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)  
     %{
     Simulation script for pruning simulation
 
@@ -52,7 +52,7 @@ function [t_vec, X_vec] = simPruning(X0,p)
         'Events', top_sticking_event_fun, 'MaxStep', .002);
     optionsTopSliding = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', top_sliding_event_fun, 'MaxStep', .002);
+        'Events', top_sliding_event_fun, 'MaxStep', .001);
     optionsBottomSticking = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', bot_sticking_event_fun, 'MaxStep', .002);
@@ -62,11 +62,11 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
-    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 0);
-    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, 1);
-    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 0);
-    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, 1);
-    both_dyn_fun = @(t,X)bothhitdyn(t,X,p);
+    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 0, ctlr_fun);
+    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, 1, ctlr_fun);
+    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 0, ctlr_fun);
+    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, 1, ctlr_fun);
+    both_dyn_fun = @(t,X)bothhitdyn(t,X,p, ctlr_fun);
 
     %% Iterate over all time
     while t_start < t_end
@@ -183,7 +183,7 @@ function dX = freedyn(t,X,p)
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
-function dX = stickingdyn(t,X,p,shape, is_bottom)
+function dX = stickingdyn(t,X,p,shape, is_bottom, ctlr_fun)
 %     disp('Time = ')
 %     disp(t)
     
@@ -250,15 +250,17 @@ function dX = stickingdyn(t,X,p,shape, is_bottom)
     
    wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
+   [newVx, newVy] = ctlr_fun(t, wrench, X);
+   
+   dX(1) = newVx;
+   dX(3) = newVy;
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
-function dX = slidingdyn(t,X,p,shape, is_bottom)
+function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
     
-    X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
-       
     % Restoring forces to the branch
     [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
@@ -316,14 +318,18 @@ function dX = slidingdyn(t,X,p,shape, is_bottom)
     
     wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
+   [newVx, newVy] = ctlr_fun(t, wrench, X);
+   
+   dX(1) = newVx;
+   dX(3) = newVy;
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
-function dX = bothhitdyn(t,x_state,p)
+function dX = bothhitdyn(t,x_state,p, ctlr_fun)
     dX = zeros(length(x_state),1);
-    dX(1) = x_state(2);  dX(3) = x_state(4);  dX(5) = x_state(2);  dX(7) = x_state(4);
+%     dX(1) = x_state(2);  dX(3) = x_state(4);  dX(5) = x_state(2);  dX(7) = x_state(4);
     
     top_cutter = translate(p.top_shape, x_state(1), x_state(3));
     bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
@@ -363,6 +369,13 @@ function dX = bothhitdyn(t,x_state,p)
     %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
     centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
     wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
+    
+   [newVx, newVy] = ctlr_fun(t, wrench, x_state);
+   
+   dX(1) = newVx;
+   dX(3) = newVy;
+   dX(5) = newVx;  
+   dX(7) = newVy;
 end
 
 
