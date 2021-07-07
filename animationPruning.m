@@ -6,7 +6,7 @@ clf;
 axis equal;
 hold on;
 
-FPS = 120;
+FPS = 60;
 perp_forces = [];
 
 %Prep video writer
@@ -68,14 +68,15 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
     bot_hit = overlaps(bottom_cutter, branch);
     
     % Find intersect between the cutter and the branch
-    if top_hit == 1
+    if top_hit == 1 && bot_hit == 0
 %         disp('Animation: top hit')
-        plot_forces(p, x_state, top_cutter, branch, 1)
-    elseif bot_hit == 1
+        plot_forces(p, x_state, top_cutter, branch)
+    elseif bot_hit == 1 && top_hit == 0
 %         disp('Animation: bottom hit')
-        plot_forces(p, x_state, bottom_cutter, branch, -1)
+        plot_forces(p, x_state, bottom_cutter, branch)
+    elseif top_hit == 1 && bot_hit == 1
+        plot_forces_attached(p, x_state, top_cutter, bottom_cutter, branch)
     else
-%         disp('No contact')
         lowright_text = ['Friction: None'];
         text(0.04, -0.035, lowright_text);
     end
@@ -203,7 +204,7 @@ for t_plt = t(1):playbackRate*1.0/FPS:t(end)
 %     [xins2,yins2] = rtPoints(xins,yins,pi-theta,rhorn-rbushing,-1);
 %     fill(xins2,yins2,[.5,.5,.5]);
 
-    % Write current time step on plot
+    %% Write current time step on plot
     timetext = ['Time: ',num2str(t_plt)];
     text(-0.07, 0.035, timetext);
 %     
@@ -317,14 +318,55 @@ function plot_forces(p, x_state, cutter, branch, dir)
 %         F_proj = sqrt(tot_Fx^2+tot_Fy^2)*cos(relative_ang);
         
 %         quiver(x_state(5), x_state(7), relVelX, relVelY, 'c', 'LineWidth', 2)
-        quiver(x_state(5), x_state(7), Vel_B_ParX, Vel_B_ParY, 'k', 'LineWidth', 2)
+%         quiver(x_state(5), x_state(7), Vel_B_ParX, Vel_B_ParY, 'k', 'LineWidth', 2)
         quiver(x_state(5), x_state(7), F_Kx/10, F_Ky/10, 'r', 'LineWidth', 2); % Restoring force to equil.
 %         quiver(x_state(5), x_state(7), -dx, -dy, 'b', 'LineWidth', 2); % Normal vector
         quiver(x_state(5), x_state(7), F_Nx/10, F_Ny/10, 'g', 'LineWidth', 2); % Normal force
         quiver(x_state(5), x_state(7), F_fx/10, F_fy/10, 'm', 'LineWidth', 2); % Friction Force
 %         annotation('arrow', [(C_intx+.2)*10/3, (x_state(5)+.2)*10/3], [(C_inty+.1)*10/2, (x_state(7)+.1)*10/2]);
         text(0.04, -0.035, frict_text);
-    end
+end
+
+function plot_forces_attached(p, x_state, top_cutter, bottom_cutter, branch)
+    F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
+    F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
+
+    poly_int_top = intersect(top_cutter, branch);
+    poly_int_bottom = intersect(bottom_cutter, branch);
+    [C_intx_top, C_inty_top] = centroid(poly_int_top);
+    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
+%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
+
+    % Find angle of the normal
+    dy_top = C_inty_top-x_state(7);
+    dx_top = C_intx_top-x_state(5);
+    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
+    
+    dy_bottom = C_inty_bot-x_state(7);
+    dx_bottom = C_intx_bot-x_state(5);
+    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
+    
+    th_Tstar = th_T-pi;
+    th_Bstar = pi+th_B;
+%     F_NB = (F_Kx - F_Ky)/(cos(th_B+pi/2) - sin(th_B+pi/2));
+%     F_NT = (F_Ky*cos(th_B+pi/2) - F_Kx*sin(th_B+pi/2))/(cos(th_T - pi/2)*(cos(th_B + pi/2) - sin(th_B + pi/2)));
+    F_NT = (-F_Ky*cos(th_Bstar) + F_Kx*sin(th_Bstar))/(sin(th_Tstar)*cos(th_Bstar)-cos(th_Tstar)*sin(th_Bstar));
+    F_NB = (-F_Kx-F_NT*cos(th_Tstar))/cos(th_Bstar);
+ 
+    F_NTx = F_NT*cos(th_Tstar);
+    F_NTy = F_NT*sin(th_Tstar);
+    
+    F_NBx = F_NB*cos(th_Bstar);
+    F_NBy = F_NB*sin(th_Bstar);
+    
+%     quiver(x_state(5), x_state(7), Vel_B_ParX, Vel_B_ParY, 'k', 'LineWidth', 2)
+    quiver(x_state(5), x_state(7), F_Kx/10, F_Ky/10, 'r', 'LineWidth', 2); % Restoring force to equil.
+    quiver(x_state(5), x_state(7), F_NTx/10, F_NTy/10, 'g', 'LineWidth', 2); % Normal force
+    quiver(x_state(5), x_state(7), F_NBx/10, F_NBy/10, 'c', 'LineWidth', 2);
+%     quiver(x_state(5), x_state(7), F_fx/10, F_fy/10, 'm', 'LineWidth', 2); % Friction Force
+    frict_text = ['Caught!'];
+%     Forces = [F_Ky, F_Kx, F_NTx, F_NTy, F_NBx, F_NBy, 0, 0];
+end
     
     
 end

@@ -62,10 +62,10 @@ function [t_vec, X_vec] = simPruning(X0,p)
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p);
-    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape);
-    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape);
-    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape);
-    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape);
+    top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 0);
+    bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, 1);
+    top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 0);
+    bottom_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.bottom_shape, 1);
     both_dyn_fun = @(t,X)bothhitdyn(t,X,p);
 
     %% Iterate over all time
@@ -183,7 +183,7 @@ function dX = freedyn(t,X,p)
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
 
-function dX = stickingdyn(t,X,p,shape)
+function dX = stickingdyn(t,X,p,shape, is_bottom)
 %     disp('Time = ')
 %     disp(t)
     
@@ -198,7 +198,7 @@ function dX = stickingdyn(t,X,p,shape)
     th_Fk = atan2(F_Ky, F_Kx);
     
     % Calculate the current Normal angle th_N
-    [th_N, dist_to_overlap] = calc_normal_angle(p, X, shape);
+    [th_N, dist_to_overlap, C_intX, C_intY] = calc_normal_angle(p, X, shape);
 
     % Angle to project F_K onto F_N vector 
     th_projection = th_Fk-th_N;
@@ -238,13 +238,29 @@ function dX = stickingdyn(t,X,p,shape)
    F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
+
+    cutter_forces = zeros(1, 8); % [FNtopX, FNbottomX, FNtopY, FNbottomY, FftopX, FfbottomX, FftopY,
+%    FfbottomY];
+    % This is REALLY STUPID trying to avoid if statements
+    % Normal X force (if top, index 1, if bottom, index 2)
+    cutter_forces(is_bottom+1) = -F_Nx;
+    cutter_forces(is_bottom+3) = -F_Ny;
+    cutter_forces(is_bottom+5) = -F_fx;
+    cutter_forces(is_bottom+7) = -F_fy;
+    
+%     [CPtopX, CPbottomX, CPtopY, CPbottomY]
+    centpoints = zeros(1,4);
+    centpoints(is_bottom+1) = C_intX;
+    centpoints(is_bottom+3) = C_intY;  
+    
+   wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
-function dX = slidingdyn(t,X,p,shape)
+function dX = slidingdyn(t,X,p,shape, is_bottom)
     
     X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
        
@@ -257,7 +273,7 @@ function dX = slidingdyn(t,X,p,shape)
     th_Fk = atan2(F_Ky, F_Kx);
     
     % Calculate the current Normal angle th_N
-    [th_N, dist_to_overlap] = calc_normal_angle(p, X, shape);
+    [th_N, dist_to_overlap, C_intX, C_intY] = calc_normal_angle(p, X, shape);
 
     % Angle to project F_K onto F_N vector 
     th_projection = th_Fk-th_N;
@@ -293,18 +309,76 @@ function dX = slidingdyn(t,X,p,shape)
     F_fy = abs(F_f*cos(th_N))*sign(-Vel_B_ParY);
 %     F_fx = 0;
 %     F_fy = 0;
+
+    cutter_forces = zeros(1, 8); % [FNtopX, FNbottomX, FNtopY, FNbottomY, FftopX, FfbottomX, FftopY,
+%    FfbottomY];
+    % This is REALLY STUPID trying to avoid if statements
+    % Normal X force (if top, index 1, if bottom, index 2)
+    cutter_forces(is_bottom+1) = -F_Nx;
+    cutter_forces(is_bottom+3) = -F_Ny;
+    cutter_forces(is_bottom+5) = -F_fx;
+    cutter_forces(is_bottom+7) = -F_fy;
+    
+    %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
+    centpoints = zeros(1,4);
+    centpoints(is_bottom+1) = C_intX;
+    centpoints(is_bottom+3) = C_intY;  
+    
+    wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
-function dX = bothhitdyn(t,X,p)
-    dX = zeros(length(X),1);
-    dX(1) = X(2);  dX(3) = X(4);  dX(5) = X(2);  dX(7) = X(4);
+function dX = bothhitdyn(t,x_state,p)
+    dX = zeros(length(x_state),1);
+    dX(1) = x_state(2);  dX(3) = x_state(4);  dX(5) = x_state(2);  dX(7) = x_state(4);
+    
+    top_cutter = translate(p.top_shape, x_state(1), x_state(3));
+    bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
+    branch = translate(p.branch_shape, x_state(5), x_state(7));
+    
+    F_Kx = -p.kx*x_state(5); %-p.b*x_state(6);
+    F_Ky = -p.ky*x_state(7); %-p.b*x_state(8);
+    
+    poly_int_top = intersect(top_cutter, branch);
+    poly_int_bottom = intersect(bottom_cutter, branch);
+    [C_intx_top, C_inty_top] = centroid(poly_int_top);
+    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
+%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
+
+    % Find angle of the normal
+    dy_top = C_inty_top-x_state(7);
+    dx_top = C_intx_top-x_state(5);
+    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
+    
+    dy_bottom = C_inty_bot-x_state(7);
+    dx_bottom = C_intx_bot-x_state(5);
+    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
+    
+    th_Tstar = th_T-pi;
+    th_Bstar = pi+th_B;
+%     F_NB = (F_Kx - F_Ky)/(cos(th_B+pi/2) - sin(th_B+pi/2));
+%     F_NT = (F_Ky*cos(th_B+pi/2) - F_Kx*sin(th_B+pi/2))/(cos(th_T - pi/2)*(cos(th_B + pi/2) - sin(th_B + pi/2)));
+    F_NT = (-F_Ky*cos(th_Bstar) + F_Kx*sin(th_Bstar))/(sin(th_Tstar)*cos(th_Bstar)-cos(th_Tstar)*sin(th_Bstar));
+    F_NB = (-F_Kx-F_NT*cos(th_Tstar))/cos(th_Bstar);
+ 
+    F_NTx = F_NT*cos(th_Tstar);
+    F_NTy = F_NT*sin(th_Tstar);
+    
+    F_NBx = F_NB*cos(th_Bstar);
+    F_NBy = F_NB*sin(th_Bstar);
+    
+    cutter_forces = [-F_NTx, -F_NBx, -F_NTy, -F_NBy, 0, 0, 0, 0];
+    %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
+    centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
+    wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
 end
 
-function [th_N, dist_to_overlap] = calc_normal_angle(p, x_state, shape)
+
+%% Helper Functions
+function [th_N, dist_to_overlap, C_intx, C_inty] = calc_normal_angle(p, x_state, shape)
     % Translate cutter and branch
     cutter = translate(shape, x_state(1), x_state(3));
     branchshape = translate(p.branch_shape, x_state(5), x_state(7));
@@ -322,7 +396,7 @@ end
 function X = calc_instant_contact_vels(p, x_state, shape)
     X = x_state;
     disp('Calculating contact velocity')
-    [th_N, ~] = calc_normal_angle(p, x_state, shape);
+    [th_N, ~, ~, ~] = calc_normal_angle(p, x_state, shape);
     VC_X = x_state(2); % x velocity of the cutter
     VC_Y = x_state(4); % y velocity of the cutter
     

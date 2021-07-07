@@ -1,0 +1,23 @@
+function getForceTorqueMeasurement(p, x_state, Forces, ContactPoints)
+    % Extract relevant values
+    ContactPointCells = num2cell(ContactPoints);
+    ForcesCells = num2cell(Forces);
+    [CPtopX, CPtopY, CPbottomX, CPbottomY] = ContactPointCells{:};
+    [FNtopX, FNtopY, FNbottomX, FNbottomY, FftopX, FftopY, FfbottomX, FfbottomY] = ForcesCells{:};
+    
+    % Determine wrench in contact frames
+    wrench_in_t = [0 0 0 FNtopX+FftopX FNtopY+FftopY 0]';
+    wrench_in_b = [0 0 0 FNbottomX+FfbottomX FNbottomY+FfbottomY 0]';
+    
+    % Determine transform to contact frames from joint 
+    T_c_top = [1 0 0 CPtopX-x_state(1);
+                0 1 0 CPtopY-x_state(3);
+                0 0 1 0; 
+                0 0 0 1];
+    T_c_bottom = [1 0 0 CPbottomX-x_state(1);
+                0 1 0 CPbottomY-x_state(3);
+                0 0 1 0; 
+                0 0 0 1];
+            
+    
+end

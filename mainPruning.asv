@@ -73,7 +73,6 @@ animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
 %% Getting Forces
 % Set up force vector
 F_vec = zeros(8, length(t_vec));
-wrench_vec = zeros(6, length(t_vec));
 for i = 1:length(t_vec)
     x_state = X_vec(:,i);
     top_cutter = translate(p.top_shape, x_state(1), x_state(3));
@@ -128,15 +127,9 @@ title('Net Y Forces')
 
 %% Wrenches
 figure
-plot(t_vec, wrench_vec(1,:))
-hold on
-for i = 2:6
-   plot(t_vec, wrench_vec(i,:))
-end
-xlabel('Time (s)')
-legend('Mx', 'My', 'Mz', 'X', 'Y', 'Z')
-title('Wrench At Sensor')
-
+plot(t_vec, 
+for i = 1:6
+   plot(
 
 
 %% FUNCTIONS
@@ -178,7 +171,7 @@ function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_c
     cutter_forces = [-F_NTx, -F_NBx, -F_NTy, -F_NBy, 0, 0, 0, 0];
     %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
     centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
-    wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
+    wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints)
 end
 
 function [Forces, wrench] = get_forces(p, x_state, cutter, branch)
@@ -237,7 +230,7 @@ function [Forces, wrench] = get_forces(p, x_state, cutter, branch)
            centpoints = [0, C_intx, 0, C_inty];
        end
        
-       wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
+       wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints)
            
     end
 
