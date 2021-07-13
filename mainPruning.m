@@ -12,7 +12,10 @@ close all
 
 addpath('C:\Users\hkolano\Documents\GitHub\ModernRobotics\packages\MATLAB\mr')
 
-%% Set up parameters
+p.runtime = 1.5;
+p.dt = 0.005;
+
+%% Set up geometry parameters p
 
 % Geometry
 p.r_branch = 0.005;     % Radius of the branch to cut, m
@@ -31,19 +34,14 @@ branch_xs = p.r_branch.*cos(t1);
 branch_ys = p.r_branch.*sin(t1);
 p.branch_shape = polyshape(branch_xs, branch_ys);
 
-% Stiffness and Damping of branch
-p.kx = 10;               % WAG for stiffness of branch
-p.ky = 20;              % WAG. Stiffer in y direction b/c tree won't bend
-p.b = .3;                % WAG (branch doesn't really oscillate)
-p.ksquish = 500000;          % If the branch gets squished into the cutter
-% p.bsquish = .3;          % If the branch gets squished into the cutter
-
-% Friction
-p.mu_s = 0.6;           % WAG for wood/metal from Wikipedia
-p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#Dry_friction
-
+% Transform actual end effector frame (right/down/forward) to what I thought the end effector
+% frame was (forward/up/left)
+T_ee_matlabee = [0 0 1 0;
+                0 -1 0 0;
+                1 0 0 0;
+                0 0 0 1];
 % Transform from the end effector frame to the cut point
-T_ee_cutpoint= [1 0 0 .09707;
+T_matlabee_cutpoint= [1 0 0 .09707;
                 0 1 0 -.005; 
                 0 0 1 .09286;
                 0 0 0 1]; 
@@ -52,17 +50,41 @@ T_cutpoint_cutjoint = [1 0 0 -.0137;
             0 1 0 .00516; 
             0 0 1 0;
             0 0 0 1]; 
-p.T_ee_cutter = T_ee_cutpoint*T_cutpoint_cutjoint;
+p.T_ee_cutter = T_ee_matlabee*T_matlabee_cutpoint*T_cutpoint_cutjoint;
+
+%% Set up Physics Parameters p
+% Stiffness and Damping of branch
+p.kx = 10;               % WAG for stiffness of branch
+p.ky = 20;              % WAG. Stiffer in y direction b/c tree won't bend
+p.b = .3;                % WAG (branch doesn't really oscillate)
+p.ksquish = 100000;          % If the branch gets squished into the cutter
+% p.bsquish = .3;          % If the branch gets squished into the cutter
+
+% Friction
+p.mu_s = 0.6;           % WAG for wood/metal from Wikipedia
+p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#Dry_friction
+
+%% Set up Controller Parameters c
+% Controller gains (Kf = force feedback gain)
+c.Kf = 1.5;
+
+% Desired wrench at EE
+% ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
+% [should be 0, no, no, no, should be 0, zhould be small]
+c.des_wrench = [0 0 0 0 0 -0.02]';
+p.next_update_time = -.001;
+c.dt = 0.008; % Control loop
+c.maxAcc = 1; % maximum acceleration of EE
 
 %% Anonymous functions
-ctlr_fun = @(t,wrench,X) controllerPruning(t,wrench,X);
+ctlr_fun = @(t,next_t,wrench,X) AdmitCtlrPruning(t,next_t,c,wrench,X);
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-Cutter_X_init = -0.05;
-Cutter_Vx_init = 0.06;
-Cutter_Y_init = 0;
-Cutter_Vy_init = 0.005;
+Cutter_X_init = -0.06;
+Cutter_Vx_init = 0.05;
+Cutter_Y_init = -0.02;
+Cutter_Vy_init = 0.0;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
 [t_vec, X_vec] = simPruning(X0,p,ctlr_fun);
@@ -128,6 +150,15 @@ end
 % ylabel('Y forces (N)')
 % legend('Restoring Y', 'Top Normal Y', 'Bottom Normal Y', 'Friction Y', 'Total')
 % title('Net Y Forces')
+
+%% Plot velocities
+figure
+plot(t_vec, X_vec(2,:))
+hold on
+plot(t_vec, X_vec(4,:))
+xlabel('Time (s)')
+ylabel('Velocities (m/s)')
+legend('X vels', 'Y vels')
 
 %% Plot Wrenches
 figure

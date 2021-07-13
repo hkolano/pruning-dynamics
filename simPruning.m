@@ -12,8 +12,15 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
     %% Initialization
     % Running time
     t_start = 0;
-    t_end = .8;
-    dt = 0.005;
+    t_end = p.runtime;
+    dt = p.dt;
+    
+    global next_update_time 
+    next_update_time = -0.01;
+    global Ax
+    Ax = 0;
+    global Ay
+    Ay = 0;
 
     sol_set = {};
     
@@ -24,16 +31,14 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
     branch_ys = p.r_branch.*sin(t1);
     p.branch_shape = polyshape(branch_xs, branch_ys);
     
-%     p.th_N = 0; % ODE will keep track of normal vector angle
-    
     % States
-    % 1: ball freefloating
+    % 1: branch freefloating
     % 2: In contact with top blade/sticking
     % 3: In contact with top blade/sliding
     % 4: In contact with bottom blade/sticking
     % 5: In contact with bottom blade/sliding
     % 6: In contact with both blades
-    p.state = 1;
+    state = 1;
     
     %% Function binding
     % Event functions
@@ -42,6 +47,7 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
     bot_sticking_event_fun = @(t,X)contactBottomStickingEvent(t,X,p);
     top_sliding_event_fun = @(t,X)contactTopSlidingEvent(t,X,p);
     bot_sliding_event_fun = @(t,X)contactBottomSlidingEvent(t,X,p);
+    both_event_fun = @(t,X)bothcontactEvent(t,X,p);
 
     % Simulation tolerances/ ODE Options
     optionsFree = odeset(...                    % When branch is freefloating
@@ -49,19 +55,22 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
         'Events', free_event_fun);
     optionsTopSticking = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', top_sticking_event_fun, 'MaxStep', .002);
+        'Events', top_sticking_event_fun, 'MaxStep', .001);
     optionsTopSliding = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', top_sliding_event_fun, 'MaxStep', .001);
+        'Events', top_sliding_event_fun, 'MaxStep', .0005);
     optionsBottomSticking = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', bot_sticking_event_fun, 'MaxStep', .002);
+        'Events', bot_sticking_event_fun, 'MaxStep', .001);
     optionsBottomSliding = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', bot_sliding_event_fun, 'MaxStep', .001);
+    optionsBoth = odeset(...
+        'RelTol', 1e-5, 'AbsTol', 1e-5', ...
+        'Events', both_event_fun, 'MaxStep', .001);
 
     % Bind dynamics function
-    free_dyn_fun = @(t,X)freedyn(t,X,p);
+    free_dyn_fun = @(t,X)freedyn(t,X,p, ctlr_fun);
     top_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.top_shape, 0, ctlr_fun);
     bottom_sticking_dyn_fun = @(t,X)stickingdyn(t,X,p,p.bottom_shape, 1, ctlr_fun);
     top_sliding_dyn_fun = @(t,X)slidingdyn(t,X,p,p.top_shape, 0, ctlr_fun);
@@ -71,67 +80,99 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
     %% Iterate over all time
     while t_start < t_end
         % Simulate the dynamics over a time interval
-        if p.state == 1 % (branch not in contact)
+        if state == 1 % (branch not in contact)
             disp('Starting Free dynamics')
             sol = ode45(free_dyn_fun, [t_start,t_end], X0, optionsFree);
             disp('Contact at t = ')
             disp(sol.x(end))
-            if sol.ie == 1 % If trigger top contact in event
-                p.state = 3; % Change to top sliding dynamics
-            elseif sol.ie == 2
-                p.state = 5; % Change to bottom sliding dynamics
+            if sol.ie == 2 % If trigger top contact in event
+                state = 3; % Change to top sliding dynamics
+            elseif sol.ie == 3
+                state = 5; % Change to bottom sliding dynamics
+            elseif sol.ie == 1
+                state = 6;
+            else
+                disp('Improper event index.')
             end
-        elseif p.state == 2 % p.state == 2 (sticking to top blade)
+        elseif state == 2 % state == 2 (sticking to top blade)
             disp('Contact with top -- sticking')
 %             X0 = calc_instant_contact_vels(p, X0, p.top_shape);
             sol = ode45(top_sticking_dyn_fun, [t_start,t_end], X0, optionsTopSticking);
             disp('Change at t = ')
             disp(sol.x(end))
+%             disp(sol.ie)
             if sol.ie == 1 % to Free
-                p.state = 1; 
+                state = 1; 
             elseif sol.ie == 2 % to Top/Sliding
-                p.state = 3; 
+                state = 3; 
+            elseif sol.ie == 3
+                state = 6;  % to Both
+            elseif any(ismember(sol.ie, 1)) % If triggers events 1 and 2 at same time
+                state = 1;
+            else
+                disp('Improper event index.')
             end
-        elseif p.state == 3 % p.state == 2 (sliding on top blade)
+        elseif state == 3 % state == 2 (sliding on top blade)
             disp('Contact with top -- sliding')
             X0 = calc_instant_contact_vels(p, X0, p.top_shape);
             sol = ode45(top_sliding_dyn_fun, [t_start,t_end], X0, optionsTopSliding);
             disp('Change at t = ')
             disp(sol.x(end))
             if sol.ie == 1
-                p.state = 1; % to Free
+                state = 1; % to Free
             elseif sol.ie == 2
-                p.state = 2; % to Top/Sticking
+                state = 2; % to Top/Sticking
             elseif sol.ie == 3
-                p.state = 6;
+                state = 6;
+            else
+                disp('Improper event index.')
             end
-        elseif p.state == 4 %(sticking to bottom blade)
+        elseif state == 4 %(sticking to bottom blade)
             disp('Contact with bottom -- sticking')
 %             X0 = calc_instant_contact_vels(p, X0, p.bottom_shape); 
             sol = ode45(bottom_sticking_dyn_fun, [t_start,t_end], X0, optionsBottomSticking);
             disp('Change at t = ')
             disp(sol.x(end))
+%             disp(sol.ie)
             if sol.ie == 1
-                p.state = 1; % to Free
+                state = 1; % to Free
             elseif sol.ie == 2
-                p.state = 5; % to Bottom/Sliding
+                state = 5; % to Bottom/Sliding
+            elseif sol.ie == 3
+                state = 6; % to both
+            else
+                disp('Improper event index.')
             end
-        elseif p.state == 5 %(sliding on bottom blade)
+        elseif state == 5 %(sliding on bottom blade)
             disp('Contact with bottom -- sliding')
             X0 = calc_instant_contact_vels(p, X0, p.bottom_shape);
             sol = ode45(bottom_sliding_dyn_fun, [t_start,t_end], X0, optionsBottomSliding);
             disp('Change at t = ')
             disp(sol.x(end))
             if sol.ie == 1
-                p.state = 1; % to Free
+                state = 1; % to Free
             elseif sol.ie == 2
-                p.state = 4; % to Bottom/sticking
+                state = 4; % to Bottom/sticking
             elseif sol.ie == 3
-                p.state = 6;
+                state = 6;
+            else
+                disp('Improper event index.')
             end
-        else % p.state = 6
+        else % state = 6
             disp('Contact with both!')
-            sol = ode45(both_dyn_fun, [t_start, t_end], X0);
+            matching_vels_state = X0;
+            matching_vels_state(6) = X0(2);
+            matching_vels_state(8) = X0(4);
+            sol = ode45(both_dyn_fun, [t_start, t_end], matching_vels_state, optionsBoth);
+            disp('Change at t = ')
+            disp(sol.x(end))
+            if sol.ie == 1 % no longer in contact with bottom (to top sliding)
+                state = 3;
+            elseif sol.ie == 2 % no longer in contact with top (to bottom sliding)
+                state = 5;
+            else
+                disp('Improper event index.')
+            end
         end
 
         % Concatenate solution sets
@@ -164,7 +205,7 @@ end % simRDHT
 
 %% Dynamics Functions
 
-function dX = freedyn(t,X,p)
+function dX = freedyn(t,X,p, ctlr_fun)
     % t == time
     % X == the state (theta1, dtheta1, x1, dx1, x2, dx2, theta2, dtheta2)
     % p == parameters structure
@@ -172,6 +213,8 @@ function dX = freedyn(t,X,p)
 
     F_Kx = -p.kx*X(5)-p.b*X(6);
     F_Ky = -p.ky*X(7)-p.b*X(8);
+    
+%     [newVx, newVy, newAx, newAy] = ctlr_fun(t, [0 0 0 0 0 0], X);
 
    dX = zeros(length(X),1);
    dX(1) = X(2);
@@ -184,12 +227,10 @@ function dX = freedyn(t,X,p)
 end % dynamics
 
 function dX = stickingdyn(t,X,p,shape, is_bottom, ctlr_fun)
-%     disp('Time = ')
-%     disp(t)
+
+    global next_update_time
     
-    X_C = X(1);  Y_C = X(3); X_B = X(5); Y_B = X(7);
-       
-%     % Restoring forces to the branch
+    % Restoring forces to the branch
     [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
     % Calculate the current Normal angle th_N
@@ -250,18 +291,25 @@ function dX = stickingdyn(t,X,p,shape, is_bottom, ctlr_fun)
     
    wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
-   [newVx, newVy] = ctlr_fun(t, wrench, X);
+   [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, wrench, X);
+   next_update_time = new_update_time;
    
-   dX(1) = newVx;
-   dX(3) = newVy;
+%    dX(1) = newVx;
+   dX(2) = newAx;
+%    dX(3) = newVy;
+   dX(4) = newAy;
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
 function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
+
+    global next_update_time
     
     % Restoring forces to the branch
+%     disp(p)
+%     disp(X)
     [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
     % Calculate the current Normal angle th_N
@@ -318,16 +366,19 @@ function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
     
     wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
    
-   [newVx, newVy] = ctlr_fun(t, wrench, X);
-   
-   dX(1) = newVx;
-   dX(3) = newVy;
+   [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, wrench, X);
+   next_update_time = new_update_time;
+%    dX(1) = newVx;
+   dX(2) = newAx;
+%    dX(3) = newVy;
+   dX(4) = newAy;
    dX(6) = (F_Kx+F_Nx+F_fx)/p.m_branch;
    dX(8) = (F_Ky+F_Ny+F_fy)/p.m_branch;
    
 end
 
 function dX = bothhitdyn(t,x_state,p, ctlr_fun)
+    global next_update_time
     dX = zeros(length(x_state),1);
 %     dX(1) = x_state(2);  dX(3) = x_state(4);  dX(5) = x_state(2);  dX(7) = x_state(4);
     
@@ -370,12 +421,14 @@ function dX = bothhitdyn(t,x_state,p, ctlr_fun)
     centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
     wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
     
-   [newVx, newVy] = ctlr_fun(t, wrench, x_state);
-   
-   dX(1) = newVx;
-   dX(3) = newVy;
-   dX(5) = newVx;  
-   dX(7) = newVy;
+   [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, wrench, x_state);
+   next_update_time = new_update_time; 
+%    dX(1) = newVx;
+   dX(2) = newAx;
+%    dX(3) = newVy;
+   dX(4) = newAy;
+   dX(6) = (F_Kx+F_NTx+F_NBx)/p.m_branch;  
+   dX(8) = (F_Ky+F_NTy+F_NBy)/p.m_branch;
 end
 
 
@@ -427,14 +480,17 @@ function [eventVal, isterminal, direction] = freeBranchEvent(t,X,p)
 %     branch = polyshape(p.r_branch.*cos(t3)+X_B, p.r_branch.*sin(t3)+Y_B);
     branch = translate(p.branch_shape, X_B, Y_B);
     overlap_shape_top = intersect(top_cutter, branch);
-    overlap_shape_bot = intersect(bottom_cutter, branch);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
+    
+    a_top = area(overlap_shape_top);
+    a_bot = area(overlap_shape_bottom);
     
 %     disp('Area of overlap')
 %     disp(area(overlap_shape));
     % ie 1 = contact with top cutter; ie 2 = contact with bottom cutter
-    eventVal = [area(overlap_shape_top)-1e-8, area(overlap_shape_bot)-1e-8];
-    isterminal = [1, 1];     % stops the sim
-    direction = [1, 1];      % any direction
+    eventVal = [(a_top-a_bot)/(a_top+a_bot)-1, a_top-1e-8, a_bot-1e-8];
+    isterminal = [1, 1, 1];     % stops the sim
+    direction = [0, 1, 1];      % any direction
 end
 %
 function [eventVal, isterminal, direction] = contactTopStickingEvent(t,X,p)
@@ -446,22 +502,27 @@ function [eventVal, isterminal, direction] = contactTopStickingEvent(t,X,p)
     
     % translate the polyshapes and find the overlap
     top_cutter = translate(p.top_shape, X_C, Y_C);
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
     branch = translate(p.branch_shape, X_B, Y_B); 
-    overlap_shape = intersect(top_cutter, branch);
+    overlap_shape_top = intersect(top_cutter, branch);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
     
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
 %     th_relV_ang = atan2(relVelY, relVelX);
     relVel_mag = sqrt(relVelY^2 + relVelX^2);
 
-%     disp('Event Check! Area of overlap')
-%     disp(area(overlap_shape));
+%     disp('Event Check! Time = ')
+%     disp(t)
+%     disp('Area of overlap =')
+%     disp(area(overlap_shape_bottom)-5e-9);
 
     % 1: back to free
     % 2: to sliding
-    eventVal = [area(overlap_shape)-5e-9, relVel_mag-.001];   % when spring at equilibrium distance...
-    isterminal = [1 1];     % stops the sim
-    direction = [-1 1];      % direction
+    % 3: to both
+    eventVal = [area(overlap_shape_top)-5e-9, relVel_mag-.001, area(overlap_shape_bottom)-1e-8];   % when spring at equilibrium distance...
+    isterminal = [1 1 1];     % stops the sim
+    direction = [-1 1 1];      % direction
 end
 
 function [eventVal, isterminal, direction] = contactTopSlidingEvent(t,X,p)
@@ -484,43 +545,20 @@ function [eventVal, isterminal, direction] = contactTopSlidingEvent(t,X,p)
 %     disp(t)
     relVel_mag = sqrt(relVelY^2 + relVelX^2);
 
-%     disp('Event Check! Area of overlap')
-%     disp(area(overlap_shape));
+%     disp('Event Check! Time = ')
+%     disp(t)
+%     disp('Area of overlap =')
+%     disp(area(overlap_shape_bottom)-5e-9);
 
     % 1: back to free
     % 2: to sticking
     % 3: to both
-    eventVal = [area(overlap_shape_top)-5e-9, relVel_mag-.001, area(overlap_shape_bottom)-5e-9];   % when spring at equilibrium distance...
+    eventVal = [area(overlap_shape_top)-5e-9, relVel_mag-.001, area(overlap_shape_bottom)-1e-8];   % when spring at equilibrium distance...
     isterminal = [1, 1, 1];     % stops the sim
     direction = [-1, -1, 1];      % direction
 end
 
 function [eventVal, isterminal, direction] = contactBottomStickingEvent(t,X,p)
-    % t: time, X: the state, p: parameters structure
-    % eventVal: Vector of event functions that halt at zero crossings
-    % isterminal: if the simulation should halt (yes for both)
-    % direction: which direction of crossing should the sim halt (positive)
-    X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
-    
-    % translate the polyshape
-    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
-    branch = translate(p.branch_shape, X_B, Y_B);
-    overlap_shape = intersect(bottom_cutter, branch);
-    
-    relVelX = X(6)-X(2);
-    relVelY = X(8)-X(4);
-%     th_relV_ang = atan2(relVelY, relVelX);
-    relVel_mag = sqrt(relVelY^2 + relVelX^2);
-
-%     disp('Event Check! Area of overlap')
-%     disp(area(overlap_shape));
-
-    eventVal = [area(overlap_shape)-5e-9, relVel_mag-.001];   % when spring at equilibrium distance...
-    isterminal = [1 1];     % stops the sim
-    direction = [-1 1];      % any direction
-end
-
-function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
     % t: time, X: the state, p: parameters structure
     % eventVal: Vector of event functions that halt at zero crossings
     % isterminal: if the simulation should halt (yes for both)
@@ -542,8 +580,61 @@ function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
 %     disp('Event Check! Area of overlap')
 %     disp(area(overlap_shape));
 
-    eventVal = [area(overlap_shape_bottom)-5e-9, relVel_mag-.001, area(overlap_shape_top)-5e-9];   % when spring at equilibrium distance...
+    % 1: to free
+    % 2: to sliding
+    % 3: to both
+    eventVal = [area(overlap_shape_bottom)-5e-9, relVel_mag-.001, area(overlap_shape_top)-1e-8];   % when spring at equilibrium distance...
+    isterminal = [1 1 1];     % stops the sim
+    direction = [-1 1 1];      % any direction
+end
+
+function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
+    % t: time, X: the state, p: parameters structure
+    % eventVal: Vector of event functions that halt at zero crossings
+    % isterminal: if the simulation should halt (yes for both)
+    % direction: which direction of crossing should the sim halt (positive)
+    X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
+    
+    % translate the polyshape
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
+    top_cutter = translate(p.top_shape, X_C, Y_C);
+    branch = translate(p.branch_shape, X_B, Y_B);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
+    overlap_shape_top = intersect(top_cutter, branch);
+    
+    assert(area(overlap_shape_bottom) > 0);
+    assert(area(overlap_shape_top) > 0);
+    
+    relVelX = X(6)-X(2);
+    relVelY = X(8)-X(4);
+%     th_relV_ang = atan2(relVelY, relVelX);
+    relVel_mag = sqrt(relVelY^2 + relVelX^2);
+
+%     disp('Event Check! Area of overlap')
+%     disp(area(overlap_shape));
+
+    eventVal = [area(overlap_shape_bottom)-5e-9, relVel_mag-.001, area(overlap_shape_top)-1e-8];
     isterminal = [1 1 1];     % stops the sim
     direction = [-1 -1 1];      % any direction
 end
 
+function [eventVal, isterminal, direction] = bothcontactEvent(t,X,p)
+
+    X_C = X(1);     Y_C = X(3); X_B = X(5); Y_B = X(7);
+    
+    bottom_cutter = translate(p.bottom_shape, X_C, Y_C);
+    top_cutter = translate(p.top_shape, X_C, Y_C);
+    branch = translate(p.branch_shape, X_B, Y_B);
+    overlap_shape_bottom = intersect(bottom_cutter, branch);
+    overlap_shape_top = intersect(top_cutter, branch);
+    
+%     disp('Event check! Area of bottom overlap: ')
+%     disp(area(overlap_shape_bottom))
+%     disp('Event chack! Area of top overlap: ')
+%     disp(area(overlap_shape_top))
+    
+    eventVal = [area(overlap_shape_bottom)-5e-9, area(overlap_shape_top)-5e-9];
+    isterminal = [1 1];
+    direction = [-1 -1];
+
+end
