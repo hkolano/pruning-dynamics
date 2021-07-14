@@ -12,7 +12,7 @@ close all
 
 addpath('C:\Users\hkolano\Documents\GitHub\ModernRobotics\packages\MATLAB\mr')
 
-p.runtime = .75;
+p.runtime = 1.5;
 p.dt = 0.004;
 
 %% Set up geometry parameters p
@@ -66,7 +66,7 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 
 %% Set up Controller Parameters c
 % Controller gains (Kf = force feedback gain)
-c.Kf = 1;
+c.Kf = 2;
 
 % Desired wrench at EE
 % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
@@ -74,16 +74,16 @@ c.Kf = 1;
 c.des_wrench = [0 0 0 0 0 -0.02]';
 p.next_update_time = -.001;
 c.dt = 0.008; % Control loop
-c.maxAcc = 1; % maximum acceleration of EE
+c.maxAcc = .5; % maximum acceleration of EE
 
 %% Anonymous functions
 ctlr_fun = @(t,next_t,wrench,X) AdmitCtlrPruning(t,next_t,c,wrench,X);
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-Cutter_X_init = -0.03;
+Cutter_X_init = -0.05;
 Cutter_Vx_init = 0.05;
-Cutter_Y_init = 0.005;
+Cutter_Y_init = -0.005;
 Cutter_Vy_init = 0.0;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
@@ -152,13 +152,15 @@ end
 % title('Net Y Forces')
 
 %% Plot velocities
-figure
-plot(t_vec, X_vec(2,:))
-hold on
-plot(t_vec, X_vec(4,:))
-xlabel('Time (s)')
-ylabel('Velocities (m/s)')
-legend('X vels', 'Y vels')
+% figure
+% plot(t_vec, X_vec(2,:))
+% hold on
+% plot(t_vec, X_vec(4,:))
+% plot(t_vec, X_vec(6,:))
+% plot(t_vec, X_vec(8,:))
+% xlabel('Time (s)')
+% ylabel('Velocities (m/s)')
+% legend('X vels', 'Y vels', 'Branch X', 'Branch Y')
 
 %% Plot Wrenches
 figure
@@ -176,20 +178,7 @@ function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_c
     % Get restoring Forces of branch
     [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
     
-    poly_int_top = intersect(top_cutter, branch);
-    poly_int_bottom = intersect(bottom_cutter, branch);
-    [C_intx_top, C_inty_top] = centroid(poly_int_top);
-    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
-%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
-
-    % Find angle of the normal
-    dy_top = C_inty_top-x_state(7);
-    dx_top = C_intx_top-x_state(5);
-    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
     
-    dy_bottom = C_inty_bot-x_state(7);
-    dx_bottom = C_intx_bot-x_state(5);
-    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
 
     th_Tstar = th_T-pi;
     th_Bstar = pi+th_B;

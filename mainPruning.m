@@ -178,20 +178,7 @@ function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_c
     % Get restoring Forces of branch
     [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
     
-    poly_int_top = intersect(top_cutter, branch);
-    poly_int_bottom = intersect(bottom_cutter, branch);
-    [C_intx_top, C_inty_top] = centroid(poly_int_top);
-    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
-%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
-
-    % Find angle of the normal
-    dy_top = C_inty_top-x_state(7);
-    dx_top = C_intx_top-x_state(5);
-    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
-    
-    dy_bottom = C_inty_bot-x_state(7);
-    dx_bottom = C_intx_bot-x_state(5);
-    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
+    [centpoints, th_T, th_B, dist_top, dist_bottom] = calcNormalsBothHit(p,x_state);
 
     th_Tstar = th_T-pi;
     th_Bstar = pi+th_B;
@@ -209,7 +196,6 @@ function [Forces, wrench] = get_forces_attached(p, x_state, top_cutter, bottom_c
     Forces = [F_Kx, F_Ky, F_NTx, F_NTy, F_NBx, F_NBy, 0, 0];
     cutter_forces = [-F_NTx, -F_NBx, -F_NTy, -F_NBy, 0, 0, 0, 0];
     %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
-    centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
     wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
 end
 

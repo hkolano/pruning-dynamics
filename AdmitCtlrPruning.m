@@ -9,8 +9,8 @@ function [AccelX, AccelY, next_update_time_out] = AdmitCtlrPruning(t, next_updat
    
 %         disp('Updating control input at time = ')
 %         disp(t)
-        disp('Current wrench: ')
-        disp(wrench')
+%         disp('Current wrench: ')
+%         disp(wrench')
         % Lambda = force directions we care about
         % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
         % [should be 0, no, no, no, should be 0, should be small]
