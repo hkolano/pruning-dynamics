@@ -52,7 +52,7 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
     % Simulation tolerances/ ODE Options
     optionsFree = odeset(...                    % When branch is freefloating
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
-        'Events', free_event_fun);
+        'Events', free_event_fun, 'MaxStep', .008);     % Max step = control loop
     optionsTopSticking = odeset(...                     % When in contact with top cutter -- TOLERANCE IS IMPORTANT 
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', top_sticking_event_fun, 'MaxStep', .001);
@@ -209,12 +209,15 @@ function dX = freedyn(t,X,p, ctlr_fun)
     % t == time
     % X == the state (theta1, dtheta1, x1, dx1, x2, dx2, theta2, dtheta2)
     % p == parameters structure
-%     Tau_ctrl = ctrl_fun(t,X);
+    % ctlr_fun == controller function
+    global next_update_time
 
     F_Kx = -p.kx*X(5)-p.b*X(6);
     F_Ky = -p.ky*X(7)-p.b*X(8);
     
-%     [newVx, newVy, newAx, newAy] = ctlr_fun(t, [0 0 0 0 0 0], X);
+    [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, [0 0 0 0 0 0]', X);
+   next_update_time = new_update_time; 
+
 
    dX = zeros(length(X),1);
    dX(1) = X(2);
@@ -222,6 +225,8 @@ function dX = freedyn(t,X,p, ctlr_fun)
    dX(5) = X(6);
    dX(7) = X(8);
    
+   dX(2) = newAx;
+   dX(4) = newAy;
    dX(6) = F_Kx/p.m_branch;
    dX(8) = F_Ky/p.m_branch;
 end % dynamics
@@ -405,16 +410,16 @@ function dX = bothhitdyn(t,x_state,p, ctlr_fun)
     F_NB = (-F_Kx-F_NT*cos(th_Tstar))/cos(th_Bstar);
     
 %     Compensate for overlap
-    squish_dist_top = p.r_branch-dist_top; % 
-    if squish_dist_top > 0
-        F_NT = F_NT + squish_dist_top^2*p.ksquish;
-    end
-    squish_dist_bottom = p.r_branch-dist_bottom;
-    if squish_dist_bottom > 0
-        F_NB = F_NB - squish_dist_bottom^2*p.ksquish;
-%         disp(squish_dist_bottom^2*p.ksquish)
-    end
- 
+%     squish_dist_top = p.r_branch-dist_top; % 
+%     if squish_dist_top > 0
+%         F_NT = F_NT + squish_dist_top^2*p.ksquish;
+%     end
+%     squish_dist_bottom = p.r_branch-dist_bottom;
+%     if squish_dist_bottom > 0
+%         F_NB = F_NB - squish_dist_bottom^2*p.ksquish;
+% %         disp(squish_dist_bottom^2*p.ksquish)
+%     end
+%  
     % Disallow "pulling" on the branch
     F_NTx = F_NT*cos(th_Tstar);
 %     if F_NTx < 0
@@ -484,7 +489,7 @@ function [centpoints, th_T, th_B, dist_to_overlap_top, dist_to_overlap_bottom] =
     % Find angle of the normal/bottom
     dy_bottom = C_inty_bot-x_state(7);
     dx_bottom = C_intx_bot-x_state(5);
-    dist_to_overlap_bottom = sqrt(dy_bottom^2+dx_top^2);
+    dist_to_overlap_bottom = sqrt(dy_bottom^2+dx_bottom^2);
     th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
     
     % Group centers of the intersections

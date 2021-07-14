@@ -5,25 +5,20 @@ function [AccelX, AccelY, next_update_time_out] = AdmitCtlrPruning(t, next_updat
 %     disp(t)
 %     disp('retained update time: ')
 %     disp(next_update_time_in)
-    if t >= next_update_time_in
+    if t > next_update_time_in
    
 %         disp('Updating control input at time = ')
 %         disp(t)
-        disp('Current wrench: ')
-        disp(wrench')
         % Lambda = force directions we care about
         % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
         % [should be 0, no, no, no, should be 0, should be small]
         lambda = diag([1 0 0 0 1 1]);
         
-        d_xdes = -c.Kf*(lambda*(c.des_wrench-wrench));
-%         disp('Wrench diff')
-%         disp((c.des_wrench-wrench)')
-%         disp('Desired Velocities')
-%         disp(d_xdes')
+        d_xdes = c.Kf*(lambda*(c.des_wrench-wrench));
+        disp(d_xdes')
     %     Vy = Kp*wrench(2);
         ideal_Vx = d_xdes(6);
-        ideal_Vy = -d_xdes(5); %% BECAUSE +Y is actually down in EE frame
+        ideal_Vy = d_xdes(5);
 
         AccelX = (ideal_Vx-X(2))/c.dt;
         AccelY = (ideal_Vy-X(4))/c.dt;

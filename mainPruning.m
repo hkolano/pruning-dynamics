@@ -12,8 +12,8 @@ close all
 
 addpath('C:\Users\hkolano\Documents\GitHub\ModernRobotics\packages\MATLAB\mr')
 
-p.runtime = .5;
-p.dt = 0.001;
+p.runtime = 1.5;
+p.dt = 0.004;
 
 %% Set up geometry parameters p
 
@@ -92,7 +92,7 @@ X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0
 
 %% Animate
 exportVideo = false;
-playbackRate = .5;
+playbackRate = 1;
 animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
 
 %% Getting Forces
@@ -152,15 +152,15 @@ end
 % title('Net Y Forces')
 
 %% Plot velocities
-figure
-plot(t_vec, X_vec(2,:))
-hold on
-plot(t_vec, X_vec(4,:))
-plot(t_vec, X_vec(6,:))
-plot(t_vec, X_vec(8,:))
-xlabel('Time (s)')
-ylabel('Velocities (m/s)')
-legend('X vels', 'Y vels', 'Branch X', 'Branch Y')
+% figure
+% plot(t_vec, X_vec(2,:))
+% hold on
+% plot(t_vec, X_vec(4,:))
+% plot(t_vec, X_vec(6,:))
+% plot(t_vec, X_vec(8,:))
+% xlabel('Time (s)')
+% ylabel('Velocities (m/s)')
+% legend('X vels', 'Y vels', 'Branch X', 'Branch Y')
 
 %% Plot Wrenches
 figure
