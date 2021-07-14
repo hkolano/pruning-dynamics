@@ -400,38 +400,10 @@ function dX = bothhitdyn(t,x_state,p, ctlr_fun)
 
     % Get centerpoints and angles of the normal contact
 %         disp('Calc Normals')
-    [centpoints, th_T, th_B, dist_top, dist_bottom] = calcNormalsBothHit(p, x_state);
+    [centpoints, th_T, th_B, ~, ~] = calcNormalsBothHit(p, x_state);
         
-    th_Tstar = th_T-pi;
-    th_Bstar = pi+th_B;
-
-    % Calculate normal forces to oppose the restoring forces
-    F_NT = (-F_Ky*cos(th_Bstar) + F_Kx*sin(th_Bstar))/(sin(th_Tstar)*cos(th_Bstar)-cos(th_Tstar)*sin(th_Bstar));
-    F_NB = (-F_Kx-F_NT*cos(th_Tstar))/cos(th_Bstar);
-    
-%     Compensate for overlap
-%     squish_dist_top = p.r_branch-dist_top; % 
-%     if squish_dist_top > 0
-%         F_NT = F_NT + squish_dist_top^2*p.ksquish;
-%     end
-%     squish_dist_bottom = p.r_branch-dist_bottom;
-%     if squish_dist_bottom > 0
-%         F_NB = F_NB - squish_dist_bottom^2*p.ksquish;
-% %         disp(squish_dist_bottom^2*p.ksquish)
-%     end
-%  
-    % Disallow "pulling" on the branch
-    F_NTx = F_NT*cos(th_Tstar);
-%     if F_NTx < 0
-%         F_NTx = 0;
-%     end
-    F_NTy = F_NT*sin(th_Tstar);
-%     if F_NTy > 0
-%         F_NTy = 0;
-%     end
-    
-    F_NBx = F_NB*cos(th_Bstar);
-    F_NBy = F_NB*sin(th_Bstar);
+    % Get normal forces that oppose the restoring force
+    [F_NTx, F_NTy, F_NBx, F_NBy] = getNormalForcesBothBlades(th_T, th_B, F_Kx, F_Ky);
     
     cutter_forces = [-F_NTx, -F_NBx, -F_NTy, -F_NBy, 0, 0, 0, 0];
     wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
