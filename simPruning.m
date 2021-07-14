@@ -400,7 +400,7 @@ function dX = bothhitdyn(t,x_state,p, ctlr_fun)
 
     % Get centerpoints and angles of the normal contact
 %         disp('Calc Normals')
-    [centpoints, th_T, th_B, dist_top, dist_bottom] = calc_normals_bothhit(p, x_state);
+    [centpoints, th_T, th_B, dist_top, dist_bottom] = calcNormalsBothHit(p, x_state);
         
     th_Tstar = th_T-pi;
     th_Bstar = pi+th_B;

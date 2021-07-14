@@ -66,7 +66,7 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 
 %% Set up Controller Parameters c
 % Controller gains (Kf = force feedback gain)
-c.Kf = .5;
+c.Kf = 2;
 
 % Desired wrench at EE
 % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
@@ -81,9 +81,9 @@ ctlr_fun = @(t,next_t,wrench,X) AdmitCtlrPruning(t,next_t,c,wrench,X);
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-Cutter_X_init = -0.03;
+Cutter_X_init = -0.05;
 Cutter_Vx_init = 0.05;
-Cutter_Y_init = 0.005;
+Cutter_Y_init = -0.005;
 Cutter_Vy_init = 0.0;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
