@@ -464,38 +464,6 @@ function [th_N, dist_to_overlap, C_intx, C_inty] = calc_normal_angle(p, x_state,
     th_N = atan2(dy, dx); % Angle of normal force
 end
 
-function [centpoints, th_T, th_B, dist_to_overlap_top, dist_to_overlap_bottom] = calc_normals_bothhit(p, x_state)
-    % Translate polyshapes
-    top_cutter = translate(p.top_shape, x_state(1), x_state(3));
-    bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
-    branch = translate(p.branch_shape, x_state(5), x_state(7));
-    
-    % Get intersects between cutter and branch
-    poly_int_top = intersect(top_cutter, branch);
-    poly_int_bottom = intersect(bottom_cutter, branch);
-    
-    assert(area(poly_int_top) > 0)
-    assert(area(poly_int_bottom) > 0)
-    
-    [C_intx_top, C_inty_top] = centroid(poly_int_top);
-    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
-    
-    % Find angle of the normal/top
-    dy_top = C_inty_top-x_state(7);
-    dx_top = C_intx_top-x_state(5);
-    dist_to_overlap_top = sqrt(dy_top^2+dx_top^2);
-    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
-    
-    % Find angle of the normal/bottom
-    dy_bottom = C_inty_bot-x_state(7);
-    dx_bottom = C_intx_bot-x_state(5);
-    dist_to_overlap_bottom = sqrt(dy_bottom^2+dx_bottom^2);
-    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
-    
-    % Group centers of the intersections
-    centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
-end
-
 function X = calc_instant_contact_vels(p, x_state, shape)
     X = x_state;
     disp('Calculating contact velocity')
