@@ -6,14 +6,16 @@ function [AccelX, AccelY, next_update_time_out] = AdmitCtlrPruning(t, next_updat
 %     disp('retained update time: ')
 %     disp(next_update_time_in)
     if t > next_update_time_in
-%         disp('Updating control input')
+   
+%         disp('Updating control input at time = ')
+%         disp(t)
         % Lambda = force directions we care about
         % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
-        % [should be 0, no, no, no, should be 0, zhould be small]
-        lambda = diag([1 0 0 0 1 1]);
-
-    %     selected_wrench = lambda*(wrench-c.des_wrench)
+        % [should be 0, no, no, no, should be 0, should be small]
+        lambda = diag([1 0 0 0 2 1]);
+        
         d_xdes = c.Kf*(lambda*(c.des_wrench-wrench));
+%         disp(d_xdes')
     %     Vy = Kp*wrench(2);
         ideal_Vx = d_xdes(5);
         ideal_Vy = d_xdes(6);
@@ -47,6 +49,10 @@ function [AccelX, AccelY, next_update_time_out] = AdmitCtlrPruning(t, next_updat
         next_update_time_out = next_update_time_in;
     end
     
+
+%      AccelX = Ax;
+%      AccelY = Ay;
+%      next_update_time_out = next_update_time_in;
 %     disp('Actual Vx')
 %     disp(X(2))
 %     disp('Desired Vx')

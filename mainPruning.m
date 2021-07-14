@@ -12,8 +12,8 @@ close all
 
 addpath('C:\Users\hkolano\Documents\GitHub\ModernRobotics\packages\MATLAB\mr')
 
-p.runtime = 1.5;
-p.dt = 0.005;
+p.runtime = .5;
+p.dt = 0.001;
 
 %% Set up geometry parameters p
 
@@ -66,7 +66,7 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 
 %% Set up Controller Parameters c
 % Controller gains (Kf = force feedback gain)
-c.Kf = 1.5;
+c.Kf = .5;
 
 % Desired wrench at EE
 % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
@@ -74,16 +74,16 @@ c.Kf = 1.5;
 c.des_wrench = [0 0 0 0 0 -0.02]';
 p.next_update_time = -.001;
 c.dt = 0.008; % Control loop
-c.maxAcc = 1; % maximum acceleration of EE
+c.maxAcc = .5; % maximum acceleration of EE
 
 %% Anonymous functions
 ctlr_fun = @(t,next_t,wrench,X) AdmitCtlrPruning(t,next_t,c,wrench,X);
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-Cutter_X_init = -0.06;
+Cutter_X_init = -0.03;
 Cutter_Vx_init = 0.05;
-Cutter_Y_init = -0.02;
+Cutter_Y_init = 0.005;
 Cutter_Vy_init = 0.0;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
@@ -92,7 +92,7 @@ X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0
 
 %% Animate
 exportVideo = false;
-playbackRate = 1;
+playbackRate = .5;
 animationPruning(p,t_vec,X_vec,exportVideo,playbackRate);
 
 %% Getting Forces
@@ -156,9 +156,11 @@ figure
 plot(t_vec, X_vec(2,:))
 hold on
 plot(t_vec, X_vec(4,:))
+plot(t_vec, X_vec(6,:))
+plot(t_vec, X_vec(8,:))
 xlabel('Time (s)')
 ylabel('Velocities (m/s)')
-legend('X vels', 'Y vels')
+legend('X vels', 'Y vels', 'Branch X', 'Branch Y')
 
 %% Plot Wrenches
 figure

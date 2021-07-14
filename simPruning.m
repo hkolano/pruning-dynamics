@@ -66,8 +66,8 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
         'RelTol', 1e-5, 'AbsTol', 1e-5, ...
         'Events', bot_sliding_event_fun, 'MaxStep', .001);
     optionsBoth = odeset(...
-        'RelTol', 1e-5, 'AbsTol', 1e-5', ...
-        'Events', both_event_fun, 'MaxStep', .001);
+        'RelTol', 1e-9, 'AbsTol', 1e-9, ...
+        'Events', both_event_fun, 'MaxStep', .0001);
 
     % Bind dynamics function
     free_dyn_fun = @(t,X)freedyn(t,X,p, ctlr_fun);
@@ -166,12 +166,12 @@ function [t_vec, X_vec] = simPruning(X0,p, ctlr_fun)
             sol = ode45(both_dyn_fun, [t_start, t_end], matching_vels_state, optionsBoth);
             disp('Change at t = ')
             disp(sol.x(end))
-            if sol.ie == 1 % no longer in contact with bottom (to top sliding)
-                state = 3;
-            elseif sol.ie == 2 % no longer in contact with top (to bottom sliding)
-                state = 5;
+            if sol.ie == 1 % no longer in contact with bottom (to top sticking)
+                state = 2;
+            elseif sol.ie == 2 % no longer in contact with top (to bottom sticking)
+                state = 4;
             else
-                disp('Improper event index.')
+                disp('Improper event index or end of sim')
             end
         end
 
@@ -230,6 +230,9 @@ function dX = stickingdyn(t,X,p,shape, is_bottom, ctlr_fun)
 
     global next_update_time
     
+    dX = zeros(length(X),1);
+    dX(1) = X(2);  dX(3) = X(4);  dX(5) = X(6);  dX(7) = X(8);
+    
     % Restoring forces to the branch
     [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
@@ -252,9 +255,6 @@ function dX = stickingdyn(t,X,p,shape, is_bottom, ctlr_fun)
     % Separate Normal forces into components
     F_Nx = F_N*cos(th_N);
     F_Ny = F_N*sin(th_N);
-
-    dX = zeros(length(X),1);
-    dX(1) = X(2);  dX(3) = X(4);  dX(5) = X(6);  dX(7) = X(8);
    
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
@@ -305,11 +305,10 @@ end
 
 function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
 
+    % Get next time the controller will update
     global next_update_time
     
     % Restoring forces to the branch
-%     disp(p)
-%     disp(X)
     [F_Kx, F_Ky, F_K, th_Fk] = getRestoringForces(p, X);
     
     % Calculate the current Normal angle th_N
@@ -358,13 +357,16 @@ function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
     cutter_forces(is_bottom+3) = -F_Ny;
     cutter_forces(is_bottom+5) = -F_fx;
     cutter_forces(is_bottom+7) = -F_fy;
+%     disp(cutter_forces)
     
     %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
     centpoints = zeros(1,4);
     centpoints(is_bottom+1) = C_intX;
-    centpoints(is_bottom+3) = C_intY;  
+    centpoints(is_bottom+3) = C_intY;
+%     disp(centpoints);
     
     wrench = getForceTorqueMeasurement(p, X, cutter_forces, centpoints);
+%     disp(wrench')
    
    [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, wrench, X);
    next_update_time = new_update_time;
@@ -378,48 +380,57 @@ function dX = slidingdyn(t,X,p,shape, is_bottom, ctlr_fun)
 end
 
 function dX = bothhitdyn(t,x_state,p, ctlr_fun)
+%     disp(t)
     global next_update_time
+    
     dX = zeros(length(x_state),1);
-%     dX(1) = x_state(2);  dX(3) = x_state(4);  dX(5) = x_state(2);  dX(7) = x_state(4);
-    
-    top_cutter = translate(p.top_shape, x_state(1), x_state(3));
-    bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
-    branch = translate(p.branch_shape, x_state(5), x_state(7));
-    
+    dX(1) = x_state(2);  dX(3) = x_state(4);  dX(7) = x_state(4);
+    if x_state(2) > 0
+        dX(5) = x_state(2);
+    else 
+        dX(5) = x_state(7);
+    end
+       
     [F_Kx, F_Ky, ~, ~] = getRestoringForces(p, x_state);
-    
-    poly_int_top = intersect(top_cutter, branch);
-    poly_int_bottom = intersect(bottom_cutter, branch);
-    [C_intx_top, C_inty_top] = centroid(poly_int_top);
-    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
-%         plot([C_intx, x_state(5)], [C_inty, x_state(7)], 'b', 'LineWidth', 2)
 
-    % Find angle of the normal
-    dy_top = C_inty_top-x_state(7);
-    dx_top = C_intx_top-x_state(5);
-    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
-    
-    dy_bottom = C_inty_bot-x_state(7);
-    dx_bottom = C_intx_bot-x_state(5);
-    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
-    
+    % Get centerpoints and angles of the normal contact
+%         disp('Calc Normals')
+    [centpoints, th_T, th_B, dist_top, dist_bottom] = calc_normals_bothhit(p, x_state);
+        
     th_Tstar = th_T-pi;
     th_Bstar = pi+th_B;
-%     F_NB = (F_Kx - F_Ky)/(cos(th_B+pi/2) - sin(th_B+pi/2));
-%     F_NT = (F_Ky*cos(th_B+pi/2) - F_Kx*sin(th_B+pi/2))/(cos(th_T - pi/2)*(cos(th_B + pi/2) - sin(th_B + pi/2)));
+
+    % Calculate normal forces to oppose the restoring forces
     F_NT = (-F_Ky*cos(th_Bstar) + F_Kx*sin(th_Bstar))/(sin(th_Tstar)*cos(th_Bstar)-cos(th_Tstar)*sin(th_Bstar));
     F_NB = (-F_Kx-F_NT*cos(th_Tstar))/cos(th_Bstar);
+    
+%     Compensate for overlap
+    squish_dist_top = p.r_branch-dist_top; % 
+    if squish_dist_top > 0
+        F_NT = F_NT + squish_dist_top^2*p.ksquish;
+    end
+    squish_dist_bottom = p.r_branch-dist_bottom;
+    if squish_dist_bottom > 0
+        F_NB = F_NB - squish_dist_bottom^2*p.ksquish;
+%         disp(squish_dist_bottom^2*p.ksquish)
+    end
  
+    % Disallow "pulling" on the branch
     F_NTx = F_NT*cos(th_Tstar);
+%     if F_NTx < 0
+%         F_NTx = 0;
+%     end
     F_NTy = F_NT*sin(th_Tstar);
+%     if F_NTy > 0
+%         F_NTy = 0;
+%     end
     
     F_NBx = F_NB*cos(th_Bstar);
     F_NBy = F_NB*sin(th_Bstar);
     
     cutter_forces = [-F_NTx, -F_NBx, -F_NTy, -F_NBy, 0, 0, 0, 0];
-    %     [CPtopX, CPbottomX, CPtopY, CPbottomY]
-    centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
     wrench = getForceTorqueMeasurement(p, x_state, cutter_forces, centpoints);
+%     disp(wrench')
     
    [newAx, newAy, new_update_time] = ctlr_fun(t, next_update_time, wrench, x_state);
    next_update_time = new_update_time; 
@@ -446,6 +457,38 @@ function [th_N, dist_to_overlap, C_intx, C_inty] = calc_normal_angle(p, x_state,
     dx = C_intx-x_state(5);
     dist_to_overlap = sqrt(dy^2+dx^2);
     th_N = atan2(dy, dx); % Angle of normal force
+end
+
+function [centpoints, th_T, th_B, dist_to_overlap_top, dist_to_overlap_bottom] = calc_normals_bothhit(p, x_state)
+    % Translate polyshapes
+    top_cutter = translate(p.top_shape, x_state(1), x_state(3));
+    bottom_cutter = translate(p.bottom_shape, x_state(1), x_state(3));
+    branch = translate(p.branch_shape, x_state(5), x_state(7));
+    
+    % Get intersects between cutter and branch
+    poly_int_top = intersect(top_cutter, branch);
+    poly_int_bottom = intersect(bottom_cutter, branch);
+    
+    assert(area(poly_int_top) > 0)
+    assert(area(poly_int_bottom) > 0)
+    
+    [C_intx_top, C_inty_top] = centroid(poly_int_top);
+    [C_intx_bot, C_inty_bot] = centroid(poly_int_bottom);
+    
+    % Find angle of the normal/top
+    dy_top = C_inty_top-x_state(7);
+    dx_top = C_intx_top-x_state(5);
+    dist_to_overlap_top = sqrt(dy_top^2+dx_top^2);
+    th_T = atan2(dy_top,dx_top); % Angle of normal force from top
+    
+    % Find angle of the normal/bottom
+    dy_bottom = C_inty_bot-x_state(7);
+    dx_bottom = C_intx_bot-x_state(5);
+    dist_to_overlap_bottom = sqrt(dy_bottom^2+dx_top^2);
+    th_B = atan2(dy_bottom, dx_bottom); % Angle of normal force from bottom
+    
+    % Group centers of the intersections
+    centpoints = [C_intx_top, C_intx_bot, C_inty_top, C_inty_bot];
 end
 
 function X = calc_instant_contact_vels(p, x_state, shape)
@@ -602,8 +645,8 @@ function [eventVal, isterminal, direction] = contactBottomSlidingEvent(t,X,p)
     overlap_shape_bottom = intersect(bottom_cutter, branch);
     overlap_shape_top = intersect(top_cutter, branch);
     
-    assert(area(overlap_shape_bottom) > 0);
-    assert(area(overlap_shape_top) > 0);
+%     assert(area(overlap_shape_bottom) > 0);
+%     assert(area(overlap_shape_top) > 0);
     
     relVelX = X(6)-X(2);
     relVelY = X(8)-X(4);
@@ -633,7 +676,7 @@ function [eventVal, isterminal, direction] = bothcontactEvent(t,X,p)
 %     disp('Event chack! Area of top overlap: ')
 %     disp(area(overlap_shape_top))
     
-    eventVal = [area(overlap_shape_bottom)-5e-9, area(overlap_shape_top)-5e-9];
+    eventVal = [area(overlap_shape_bottom)-6e-9, area(overlap_shape_top)-6e-9];
     isterminal = [1 1];
     direction = [-1 -1];
 

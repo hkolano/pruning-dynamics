@@ -12,8 +12,8 @@ close all
 
 addpath('C:\Users\hkolano\Documents\GitHub\ModernRobotics\packages\MATLAB\mr')
 
-p.runtime = 0.7;
-p.dt = 0.005;
+p.runtime = .75;
+p.dt = 0.004;
 
 %% Set up geometry parameters p
 
@@ -66,26 +66,24 @@ p.mu_k = 0.49;          % from Wikipedia https://en.wikipedia.org/wiki/Friction#
 
 %% Set up Controller Parameters c
 % Controller gains (Kf = force feedback gain)
-c.Kf = 2;
+c.Kf = 1;
 
 % Desired wrench at EE
 % ['Mx', 'My', 'Mz', 'X', 'Y', 'Z']
 % [should be 0, no, no, no, should be 0, zhould be small]
-c.des_wrench = [0 0 0 0 0 -0.005]';
-c.next_update_time = -.001;
-c.Ax = 0;
-c.Ay = 0;
-
+c.des_wrench = [0 0 0 0 0 -0.02]';
+p.next_update_time = -.001;
 c.dt = 0.008; % Control loop
+c.maxAcc = 1; % maximum acceleration of EE
 
 %% Anonymous functions
 ctlr_fun = @(t,next_t,wrench,X) AdmitCtlrPruning(t,next_t,c,wrench,X);
 
 %% Simulate the system
 % State: [x_cutter, xd_c, y_cutter, yd_c, x_branch, xd_b, y_branch, yd_b]
-Cutter_X_init = -0.06;
+Cutter_X_init = -0.03;
 Cutter_Vx_init = 0.05;
-Cutter_Y_init = -0.0;
+Cutter_Y_init = 0.005;
 Cutter_Vy_init = 0.0;
 X0 = [Cutter_X_init, Cutter_Vx_init, Cutter_Y_init, Cutter_Vy_init, 0.0001, 0, 0.0, 0];
 
